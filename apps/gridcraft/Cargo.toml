@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
-default-run = "gridcraft"
+default-run = "excel-angero"
 description = "GridCraft desktop app"
 
 [lints]
@@ -17,6 +17,7 @@ eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "
 egui = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
+zip = { workspace = true }  # Office Angerô: atualização automática
 image = { workspace = true }
 
 [build-dependencies]
@@ -52,3 +53,7 @@ objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std
 [[test]]
 name = "mac_menu_appkit"
 harness = false
+
+[[bin]]
+name = "excel-angero"
+path = "src/main.rs"

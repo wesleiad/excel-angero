@@ -285,6 +285,9 @@ pub struct SheetApp {
     /// holding other text. Once the cut has been pasted, Paste leaves this text alone.
     cut_text: Option<String>,
     pub started: f64,
+    /// Office Angerô: arquivos sendo lidos em outra thread (caminho, resultado); a janela segue
+    /// respondendo e mostra "Abrindo…" até cada um entrar na sessão (ver [`SheetApp::open_path`]).
+    abrindo: Vec<(String, std::sync::mpsc::Receiver<gridcraft_engine::Result<gridcraft_engine::cmd::file::Aberto>>)>,
 }
 
 impl SheetApp {
@@ -329,6 +332,7 @@ impl SheetApp {
             clipboard_text_at_copy: None,
             cut_text: None,
             started: now_ms(),
+            abrindo: Vec::new(),
         }
     }
 
@@ -561,7 +565,7 @@ impl SheetApp {
         if e.contains("is not available right now") {
             self.toast = Some((e, now_ms()));
         } else {
-            self.message = Some(("GridCraft".into(), clean_error(&e)));
+            self.message = Some(("Excel".into(), clean_error(&e)));
         }
     }
 
@@ -712,7 +716,7 @@ impl SheetApp {
         for req in self.session.take_ui_requests() {
             match req {
                 UiRequest::Dialog(name, params) => self.open_dialog(&name, params),
-                UiRequest::Message(m) => self.message = Some(("GridCraft".into(), m)),
+                UiRequest::Message(m) => self.message = Some(("Excel".into(), m)),
                 UiRequest::EditCell(text) => {
                     let text = text.map(|text| {
                         self.session
@@ -788,13 +792,69 @@ impl SheetApp {
     }
 
     pub fn open_path(&mut self, path: &str) {
+        // Office Angerô: arquivo que ainda não está aberto é lido em outra thread (uma planilha de
+        // 100 MB leva dezenas de segundos num PC antigo); `poll_abrindo` termina a abertura.
+        // Arquivos pequenos abrem na hora, como antes.
+        let grande = std::fs::metadata(path).is_ok_and(|m| m.len() > 4 << 20);
+        let ja_aberto = self.session.documents().iter().any(|d| d.path.as_deref() == Some(path));
+        if grande && !ja_aberto && !self.abrindo.iter().any(|(p, _)| p == path) {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let caminho = path.to_string();
+            let iniciou = std::thread::Builder::new().name("abrir-planilha".into()).spawn(move || {
+                let _ = tx.send(gridcraft_engine::cmd::file::preparar_abertura(&caminho, None));
+            });
+            if iniciou.is_ok() {
+                self.abrindo.push((path.to_string(), rx));
+                return;
+            }
+        }
         match self.run("file.open", json!({"path": path})) {
             Ok(r) => self.after_open(Some(path), &r),
             // A password-protected workbook: ask for the password; the dialog opens it.
             Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => self.open_dialog("openPassword", json!({"path": path})),
-            Err(e) => self.message = Some(("GridCraft".into(), clean_error(&e))),
+            Err(e) => self.message = Some(("Excel".into(), clean_error(&e))),
         }
         self.after_engine();
+    }
+
+    /// Office Angerô: termina as aberturas cuja leitura acabou e, enquanto houver alguma, mostra
+    /// "Abrindo…" no meio da janela.
+    fn poll_abrindo(&mut self, ctx: &egui::Context) {
+        if self.abrindo.is_empty() {
+            return;
+        }
+        let mut prontos = Vec::new();
+        self.abrindo.retain(|(caminho, rx)| match rx.try_recv() {
+            Ok(r) => {
+                prontos.push((caminho.clone(), r));
+                false
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => true,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => false,
+        });
+        for (caminho, r) in prontos {
+            match r.and_then(|a| gridcraft_engine::cmd::file::concluir_abertura(&mut self.session, a)).map_err(|e| e.to_string()) {
+                Ok(r) => self.after_open(Some(&caminho), &r),
+                Err(e) if e.contains(gridcraft_engine::io::PASSWORD_REQUIRED) => self.open_dialog("openPassword", json!({"path": caminho})),
+                Err(e) => self.message = Some(("Excel".into(), clean_error(&e))),
+            }
+            self.after_engine();
+        }
+        if let Some((caminho, _)) = self.abrindo.first() {
+            let nome = std::path::Path::new(caminho).file_name().and_then(|n| n.to_str()).unwrap_or(caminho).to_string();
+            egui::Area::new(egui::Id::new("office_angero_abrindo")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0]).show(
+                ctx,
+                |ui| {
+                    egui::Frame::popup(ui.style()).inner_margin(18.0).show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(format!("Abrindo {nome}…"));
+                        });
+                    });
+                },
+            );
+            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        }
     }
 
     /// What follows a successful `file.open`: the workbook shows (not the Backstage), the Recent
@@ -827,7 +887,7 @@ impl SheetApp {
         let vba: Vec<&str> = msgs.iter().copied().filter(|m| m.to_lowercase().contains("macro") || m.contains("VBA")).collect();
         if !vba.is_empty() {
             self.notice = Some(Notice {
-                text: "This workbook contains VBA macros. GridCraft keeps them intact when you save, but does not run them.".into(),
+                text: "This workbook contains VBA macros. Excel keeps them intact when you save, but does not run them.".into(),
                 kind: NoticeKind::Warning,
                 action: Some(("What this means".into(), "macros".into())),
             });
@@ -935,7 +995,7 @@ impl SheetApp {
         let text = match self.session.active().map(|d| formula_locale::canonical(&text, ed.locale, &d.wb, ed.sheet, ed.cell)) {
             Some(Ok(text)) => text,
             Some(Err(error)) => {
-                self.message = Some(("GridCraft".into(), error.to_string()));
+                self.message = Some(("Excel".into(), error.to_string()));
                 self.editor = Some(ed);
                 self.session.mode = gridcraft_engine::Mode::Edit;
                 return false;
@@ -947,7 +1007,7 @@ impl SheetApp {
             && let Some((dv, msg)) = gridcraft_engine::cmd::data::check_validation(&d.wb, ed.sheet, ed.cell, &text)
         {
             if dv.error_style == gridcraft_engine::model::ErrorStyle::Stop {
-                let title = if dv.error_title.is_empty() { "GridCraft".to_string() } else { dv.error_title.clone() };
+                let title = if dv.error_title.is_empty() { "Excel".to_string() } else { dv.error_title.clone() };
                 self.message = Some((title, msg));
                 self.editor = Some(ed);
                 self.session.mode = gridcraft_engine::Mode::Edit;
@@ -981,7 +1041,7 @@ impl SheetApp {
                 true
             }
             Err(e) => {
-                self.message = Some(("GridCraft".into(), clean_error(&e)));
+                self.message = Some(("Excel".into(), clean_error(&e)));
                 self.editor = Some(ed);
                 self.session.mode = gridcraft_engine::Mode::Edit;
                 false
@@ -1113,7 +1173,7 @@ impl SheetApp {
                     self.backstage = None;
                     self.open_dialog("openPassword", json!({"name": name, "base64": b64}));
                 }
-                Err(e) => self.message = Some(("GridCraft".into(), clean_error(&e))),
+                Err(e) => self.message = Some(("Excel".into(), clean_error(&e))),
             }
             self.after_engine();
         }
@@ -1137,6 +1197,7 @@ impl SheetApp {
             return;
         }
         let t0 = now_ms();
+        self.poll_abrindo(&ctx);
         text_box::before_ui(self, &ctx);
         // The language the widgets translate with this frame (see `i18n::current`).
         i18n::set_current(&ctx, self.ui.language);

@@ -10,7 +10,7 @@ publish = false
 workspace = true
 
 [[bin]]
-name = "gridcraft-cli"
+name = "excel-angero-cli"
 path = "src/main.rs"
 
 [dependencies]

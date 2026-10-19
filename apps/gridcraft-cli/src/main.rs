@@ -1,24 +1,24 @@
 //! Headless GridCraft.
 //!
 //! ```text
-//! gridcraft-cli info <file> [--json]
-//! gridcraft-cli convert <in> <out> [--sheet NAME]
-//! gridcraft-cli eval <formula> [--in FILE] [--sheet S] [--cell A1] [--json]
-//! gridcraft-cli cat <file> [--range A1:D20] [--sheet S] [--formulas] [--csv]
-//! gridcraft-cli check <file-or-dir>... [--json] [--tolerance 1e-9] [--max-report N]
-//! gridcraft-cli run [--in FILE | --sample NAME] [--cmd 'id={json}']... [--script FILE.jsonl] [--out FILE] [--print RANGE] [--quiet]
-//! gridcraft-cli commands [--json] [--search X]
-//! gridcraft-cli functions [--json] [--search X] [--category C]
-//! gridcraft-cli mcp [--connect PORT] [--in FILE | --sample NAME]
-//! gridcraft-cli send <port> <method> [json]
-//! gridcraft-cli version | --version
+//! excel-angero-cli info <file> [--json]
+//! excel-angero-cli convert <in> <out> [--sheet NAME]
+//! excel-angero-cli eval <formula> [--in FILE] [--sheet S] [--cell A1] [--json]
+//! excel-angero-cli cat <file> [--range A1:D20] [--sheet S] [--formulas] [--csv]
+//! excel-angero-cli check <file-or-dir>... [--json] [--tolerance 1e-9] [--max-report N]
+//! excel-angero-cli run [--in FILE | --sample NAME] [--cmd 'id={json}']... [--script FILE.jsonl] [--out FILE] [--print RANGE] [--quiet]
+//! excel-angero-cli commands [--json] [--search X]
+//! excel-angero-cli functions [--json] [--search X] [--category C]
+//! excel-angero-cli mcp [--connect PORT] [--in FILE | --sample NAME]
+//! excel-angero-cli send <port> <method> [json]
+//! excel-angero-cli version | --version
 //! ```
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
 use std::process::ExitCode;
 
-/// `println!` that ends the program quietly when stdout is closed (`gridcraft-cli commands |
+/// `println!` that ends the program quietly when stdout is closed (`excel-angero-cli commands |
 /// head`) instead of panicking on a broken pipe.
 macro_rules! outln {
     ($($arg:tt)*) => {{
@@ -35,19 +35,19 @@ use gridcraft_engine::Session;
 use serde_json::{Value, json};
 
 const USAGE: &str = "usage:
-  gridcraft-cli info <file> [--json]                      sheets, used ranges, tables, charts, names
-  gridcraft-cli convert <in> <out> [--sheet NAME]         xlsx/csv/tsv/json/html by extension
-  gridcraft-cli eval <formula> [--in FILE] [--sheet S] [--cell A1] [--json]
-  gridcraft-cli cat <file> [--range A1:D20] [--sheet S] [--formulas] [--csv]
-  gridcraft-cli check <file-or-dir>... [--json] [--tolerance 1e-9] [--max-report N]
+  excel-angero-cli info <file> [--json]                      sheets, used ranges, tables, charts, names
+  excel-angero-cli convert <in> <out> [--sheet NAME]         xlsx/csv/tsv/json/html by extension
+  excel-angero-cli eval <formula> [--in FILE] [--sheet S] [--cell A1] [--json]
+  excel-angero-cli cat <file> [--range A1:D20] [--sheet S] [--formulas] [--csv]
+  excel-angero-cli check <file-or-dir>... [--json] [--tolerance 1e-9] [--max-report N]
                      cached-value calc oracle + XLSX round-trip fidelity (exit 1 on any difference)
-  gridcraft-cli run [--in FILE | --sample NAME] [--cmd 'id={json}']... [--script FILE.jsonl]
+  excel-angero-cli run [--in FILE | --sample NAME] [--cmd 'id={json}']... [--script FILE.jsonl]
                      [--out FILE] [--print RANGE] [--quiet]
-  gridcraft-cli commands [--json] [--search X]
-  gridcraft-cli functions [--json] [--search X] [--category C]
-  gridcraft-cli mcp [--connect PORT] [--in FILE | --sample NAME]
-  gridcraft-cli send <port> <method> [json]
-  gridcraft-cli version";
+  excel-angero-cli commands [--json] [--search X]
+  excel-angero-cli functions [--json] [--search X] [--category C]
+  excel-angero-cli mcp [--connect PORT] [--in FILE | --sample NAME]
+  excel-angero-cli send <port> <method> [json]
+  excel-angero-cli version";
 
 /// stdout went away. A reader that stopped early (a closed pipe) ends the program quietly; any
 /// other write error is reported.
@@ -55,7 +55,7 @@ fn stdout_failed(e: std::io::Error) -> ! {
     if e.kind() == std::io::ErrorKind::BrokenPipe {
         std::process::exit(0);
     }
-    eprintln!("gridcraft-cli: can't write to stdout: {e}");
+    eprintln!("excel-angero-cli: can't write to stdout: {e}");
     std::process::exit(1);
 }
 
@@ -64,7 +64,7 @@ fn main() -> ExitCode {
     let rest = args.get(1..).unwrap_or_default();
     let r = match args.first().map(String::as_str) {
         Some("--version" | "-V" | "version") => {
-            outln!("gridcraft-cli {}", env!("CARGO_PKG_VERSION"));
+            outln!("excel-angero-cli {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         Some("--help" | "-h" | "help") => {
@@ -87,7 +87,7 @@ fn main() -> ExitCode {
     match r {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("gridcraft-cli: {e}");
+            eprintln!("excel-angero-cli: {e}");
             ExitCode::FAILURE
         }
     }
@@ -503,7 +503,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
             let addr = control_addr(c);
             Box::new(
                 Remote::connect(&addr)
-                    .map_err(|e| format!("cannot connect to the GridCraft app at {addr}: {e} (start it with `gridcraft --control PORT`)"))?,
+                    .map_err(|e| format!("cannot connect to the Excel app at {addr}: {e} (start it with `gridcraft --control PORT`)"))?,
             )
         }
         None => {
@@ -519,7 +519,7 @@ fn mcp(args: &[String]) -> Result<(), String> {
             Box::new(Headless::with_session(session))
         }
     };
-    eprintln!("gridcraft-cli: MCP server on stdio ({})", backend.describe());
+    eprintln!("excel-angero-cli: MCP server on stdio ({})", backend.describe());
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
     Server::new(backend).serve(stdin.lock(), stdout.lock()).map_err(|e| e.to_string())
@@ -539,7 +539,7 @@ fn send(args: &[String]) -> Result<(), String> {
     }
     let addr = control_addr(port);
     let mut r = Remote::connect(&addr)
-        .map_err(|e| format!("cannot connect to the GridCraft app at {addr}: {e} (start it with `gridcraft --control {port}`)"))?;
+        .map_err(|e| format!("cannot connect to the Excel app at {addr}: {e} (start it with `gridcraft --control {port}`)"))?;
     let v = r.call(method, params)?;
     outln!("{}", pretty(&v));
     Ok(())

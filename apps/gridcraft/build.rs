@@ -14,12 +14,12 @@ fn main() {
     }
     let mut res = winresource::WindowsResource::new();
     res.set_icon("../../assets/app-icon/gridcraft.ico")
-        .set("ProductName", "GridCraft")
-        .set("FileDescription", "GridCraft spreadsheet")
-        .set("CompanyName", "Learning Machines LLC")
-        .set("LegalCopyright", "Copyright (c) the GridCraft authors. MIT OR Apache-2.0.")
-        .set("OriginalFilename", "gridcraft.exe")
-        .set("InternalName", "gridcraft");
+        .set("ProductName", "Excel - Angerô")
+        .set("FileDescription", "Excel - Angerô")
+        .set("CompanyName", "Grupo Angerô")
+        .set("LegalCopyright", "Grupo Angerô. MIT OR Apache-2.0 (ver NOTICE).")
+        .set("OriginalFilename", "excel-angero.exe")
+        .set("InternalName", "excel-angero");
     if let Err(e) = res.compile() {
         if std::env::var_os("GRIDCRAFT_REQUIRE_WINRES").is_some() {
             eprintln!("embedding Windows resources failed: {e}");

@@ -55,21 +55,56 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
         s.ui_requests.push(crate::UiRequest::Dialog("open".into(), json!({})));
         return ok();
     };
-    let encrypted = gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Encrypted;
-    let (mut wb, warnings) = crate::io::open_bytes_with(&name, &bytes, str_param(p, "password"), bool_param(p, "csvAsText").unwrap_or(false))?;
-    wb.source_dir = str_param(p, "path").and_then(crate::io::source_dir);
+    let aberto = preparar(name, &bytes, str_param(p, "path"), str_param(p, "password"), bool_param(p, "csvAsText").unwrap_or(false))?;
+    concluir_abertura(s, aberto)
+}
+
+/// Office Angerô: uma planilha já lida e decodificada, pronta para entrar na sessão. A leitura
+/// (a parte demorada de abrir um arquivo grande) é feita por [`preparar_abertura`] sem a sessão,
+/// então a interface pode fazê-la em outra thread e mostrar "Abrindo…" em vez de travar.
+pub struct Aberto {
+    name: String,
+    wb: gridcraft_model::Workbook,
+    warnings: Vec<String>,
+    path: Option<String>,
+    is_xlsx_content: bool,
+}
+
+/// Lê e decodifica o arquivo `path` (sem a sessão; pode rodar em outra thread).
+pub fn preparar_abertura(path: &str, password: Option<&str>) -> Result<Aberto> {
+    let bytes = crate::io::read_file(path)?;
+    preparar(path.to_string(), &bytes, Some(path), password, false)
+}
+
+fn preparar(name: String, bytes: &[u8], from_path: Option<&str>, password: Option<&str>, csv_as_text: bool) -> Result<Aberto> {
+    let encrypted = gridcraft_xlsx::sniff(bytes) == gridcraft_xlsx::Format::Encrypted;
+    let (mut wb, warnings) = crate::io::open_bytes_with(&name, bytes, password, csv_as_text)?;
+    wb.source_dir = from_path.and_then(crate::io::source_dir);
     let imported =
         matches!(crate::io::FileKind::from_path(&name), Some(crate::io::FileKind::Ods | crate::io::FileKind::Xlsb | crate::io::FileKind::Xls))
-            || matches!(gridcraft_xlsx::sniff(&bytes), gridcraft_xlsx::Format::Ods | gridcraft_xlsx::Format::Xlsb | gridcraft_xlsx::Format::Xls);
-    let title = if imported {
+            || matches!(gridcraft_xlsx::sniff(bytes), gridcraft_xlsx::Format::Ods | gridcraft_xlsx::Format::Xlsb | gridcraft_xlsx::Format::Xls);
+    // An import has no save target: ordinary Save must ask for a new destination. Neither does a
+    // workbook decrypted with its password, so Save never replaces the encrypted original with
+    // an unprotected copy.
+    let path = from_path.filter(|_| !imported && !encrypted).map(str::to_string);
+    let is_xlsx_content = crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(bytes) == gridcraft_xlsx::Format::Xlsx;
+    let name = if imported {
         format!("{} (imported).xlsx", std::path::Path::new(&name).file_stem().and_then(|n| n.to_str()).unwrap_or("Book"))
     } else {
         std::path::Path::new(&name).file_name().and_then(|n| n.to_str()).unwrap_or("Book").to_string()
     };
-    // An import has no save target: ordinary Save must ask for a new destination. Neither does a
-    // workbook decrypted with its password, so Save never replaces the encrypted original with
-    // an unprotected copy.
-    let path = str_param(p, "path").filter(|_| !imported && !encrypted).map(str::to_string);
+    Ok(Aberto { name, wb, warnings, path, is_xlsx_content })
+}
+
+/// Põe na sessão uma planilha lida por [`preparar_abertura`] (rápido; na thread da interface).
+pub fn concluir_abertura(s: &mut Session, aberto: Aberto) -> Result<Json> {
+    let Aberto { name: title, wb, warnings, path, is_xlsx_content } = aberto;
+    if let Some(p) = path.as_deref()
+        && let Some(i) = s.documents().iter().position(|d| d.path.as_deref() == Some(p))
+    {
+        s.set_active(i);
+        return Ok(json!({"index": i, "alreadyOpen": true}));
+    }
     // Replace an untouched blank Book1 like Excel does.
     if s.documents().len() == 1
         && s.active().is_some_and(|d| d.path.is_none() && !d.is_dirty() && d.undo.is_empty() && d.wb.sheets.iter().all(|sh| sh.cells.is_empty()))
@@ -77,7 +112,7 @@ fn open(s: &mut Session, p: &Json) -> Result<Json> {
         s.close_document(0);
     }
     let mut doc = DocState::new(wb, path, title);
-    if crate::io::FileKind::from_path(&name).is_none() && gridcraft_xlsx::sniff(&bytes) == gridcraft_xlsx::Format::Xlsx {
+    if is_xlsx_content {
         doc.content_kind = Some(crate::io::FileKind::Xlsx);
     }
     let i = s.add_document(doc);
