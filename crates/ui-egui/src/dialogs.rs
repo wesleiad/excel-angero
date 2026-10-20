@@ -76,7 +76,7 @@ impl Dialog {
         }
     }
 
-    fn custom(name: &str, title: &str, defaults: Json) -> Dialog {
+    pub(crate) fn custom(name: &str, title: &str, defaults: Json) -> Dialog {
         Dialog {
             name: name.into(),
             title: title.into(),
@@ -1018,6 +1018,11 @@ fn build_params(d: &Dialog) -> Json {
     v
 }
 
+/// A pergunta "Deseja salvar as alterações?" ao fechar a janela.
+pub(crate) fn quit() -> Dialog {
+    Dialog::custom("quit", "Excel", json!({}))
+}
+
 pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
     let Some(mut d) = app.dialog.take() else { return };
     if d.name == "pasteSpecial" {
@@ -1180,6 +1185,36 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                             app.run_or_alert(id, json!({"path": t}));
                         }
                     }
+                }
+                "quit" => {
+                    let names: Vec<String> = app.session.documents().iter().filter(|d| d.is_dirty()).map(|d| d.display_title()).collect();
+                    let what = match names.as_slice() {
+                        [one] => format!("“{one}”"),
+                        [] => "esta pasta de trabalho".to_string(),
+                        many => format!("{} pastas de trabalho", many.len()),
+                    };
+                    ui.label(egui::RichText::new(format!("Deseja salvar as alterações feitas em {what}?")).strong());
+                    ui.label("Se você não salvar, as alterações serão perdidas.");
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        let save = ui.button("Salvar");
+                        if save.clicked() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                            open = false;
+                            if app.save_all_for_quit() {
+                                app.quit_confirmed = true;
+                                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        }
+                        if ui.button("Não Salvar").clicked() {
+                            open = false;
+                            app.editor = None;
+                            app.quit_confirmed = true;
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
+                        if ui.button("Cancelar").clicked() || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                            open = false;
+                        }
+                    });
                 }
                 "saveChanges" => {
                     ui.label(format!("Do you want to save the changes you made to {}?", d.values.get("title").and_then(Json::as_str).unwrap_or("this workbook")));
@@ -1753,13 +1788,13 @@ fn insert_function(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confir
     });
     let locale = app.ui.language.formula_locale();
     let list = gridcraft_engine::cmd::formulas::function_list();
-    let q = d.search.to_ascii_lowercase();
+    let q = d.search.to_lowercase();
     let hits: Vec<&Json> = list
         .iter()
         .filter(|f| {
             q.is_empty()
-                || f["name"].as_str().is_some_and(|n| locale.function_name(n).to_ascii_lowercase().contains(&q))
-                || f["description"].as_str().is_some_and(|n| n.to_ascii_lowercase().contains(&q))
+                || f["name"].as_str().is_some_and(|n| locale.function_name(n).to_lowercase().contains(&q))
+                || f["name"].as_str().and_then(|n| crate::formula_locale::description(n, locale)).is_some_and(|n| n.to_lowercase().contains(&q))
         })
         .take(300)
         .collect();
@@ -1767,7 +1802,7 @@ fn insert_function(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confir
         for (i, f) in hits.iter().enumerate() {
             let name = locale.function_name(f["name"].as_str().unwrap_or(""));
             let r = ui.add(
-                egui::Button::selectable(i == d.list_index, format!("{name:<18} {}", f["category"].as_str().unwrap_or("")))
+                egui::Button::selectable(i == d.list_index, format!("{name:<18} {}", categoria_pt(f["category"].as_str().unwrap_or(""))))
                     .min_size(vec2(480.0, 20.0)),
             );
             if r.clicked() {
@@ -2737,5 +2772,26 @@ mod tests {
         let d = Dialog::open(&mut app, "dataValidation", json!({})).unwrap();
         assert_eq!(d.values["type"], "list");
         assert!(d.values.get("formula1").is_none());
+    }
+}
+
+/// Categoria da função em português, como no Excel brasileiro.
+fn categoria_pt(category: &str) -> &str {
+    match category {
+        "MathTrig" => "Matemática e trigonometria",
+        "Statistical" => "Estatística",
+        "Logical" => "Lógica",
+        "Lookup" => "Pesquisa e referência",
+        "Text" => "Texto",
+        "DateTime" | "Date" => "Data e hora",
+        "Financial" => "Financeira",
+        "Information" | "Info" => "Informações",
+        "Engineering" => "Engenharia",
+        "Database" => "Banco de dados",
+        "Cube" => "Cubo",
+        "Web" => "Web",
+        "AddIn" => "Suplementos",
+        "Compatibility" => "Compatibilidade",
+        other => other,
     }
 }

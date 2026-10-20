@@ -246,6 +246,8 @@ pub struct SheetApp {
     pub notice: Option<Notice>,
     pub services: Services,
     pub printing: printing::State,
+    /// A janela pode fechar: o usuário já respondeu à pergunta de salvar as alterações.
+    pub quit_confirmed: bool,
     print_feedback_seen: Option<printing::Feedback>,
     /// Synthetic input from agents, one batch per frame (drags need several frames).
     pub synthetic: std::collections::VecDeque<Vec<egui::Event>>,
@@ -306,6 +308,7 @@ impl SheetApp {
             notice: None,
             services,
             printing: Default::default(),
+            quit_confirmed: false,
             print_feedback_seen: None,
             synthetic: Default::default(),
             control_rx: None,
@@ -735,6 +738,34 @@ impl SheetApp {
         }
     }
 
+    /// Alguma pasta tem alterações não salvas (inclui a célula que está sendo editada).
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.editor.is_some() || self.text_box_editor.is_some() || self.session.documents().iter().any(|d| d.is_dirty())
+    }
+
+    /// Salva todas as pastas alteradas antes de fechar. Pasta sem arquivo pergunta onde salvar;
+    /// se o usuário cancelar ou der erro, devolve `false` e a janela continua aberta.
+    pub fn save_all_for_quit(&mut self) -> bool {
+        if !self.commit_edit(0, 0, false, false) || self.commit_text_box_edit().is_err() {
+            return false;
+        }
+        for i in 0..self.session.documents().len() {
+            if !self.session.documents().get(i).is_some_and(|d| d.is_dirty()) {
+                continue;
+            }
+            self.session.set_active(i);
+            if self.session.active().is_some_and(|d| d.path.is_some()) {
+                self.run_or_alert("file.save", json!({}));
+            } else {
+                self.open_dialog("saveAs", json!({}));
+            }
+            if self.session.active().is_some_and(|d| d.is_dirty()) {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn open_dialog(&mut self, name: &str, params: Json) {
         if let Err(e) = self.commit_text_box_edit() {
             self.message = Some(("Text Box".into(), clean_error(&e)));
@@ -1088,6 +1119,14 @@ impl SheetApp {
 
     /// Per-frame logic (control channel, screenshots). Call before `ui`.
     pub fn logic(&mut self, ctx: &egui::Context) {
+        // Fechar a janela com alterações não salvas pergunta antes, como no Excel.
+        if ctx.input(|i| i.viewport().close_requested()) && !self.quit_confirmed && self.has_unsaved_changes() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.backstage = None;
+            if self.dialog.as_ref().is_none_or(|d| d.name != "quit") {
+                self.dialog = Some(dialogs::quit());
+            }
+        }
         // A keytip control request lives one frame: the ribbon consumes it during `ui`, and
         // anything that never reached a control (collapsed ribbon, tab switch) is dropped.
         self.ui.keytip_invoke = None;

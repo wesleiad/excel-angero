@@ -6,6 +6,7 @@
 pub mod adjust;
 pub mod ast;
 mod input;
+mod pt_br;
 pub mod lexer;
 pub mod parser;
 pub mod printer;

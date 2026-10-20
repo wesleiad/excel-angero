@@ -2,48 +2,37 @@
 
 use crate::{Expr, ParseError, parser};
 
-/// Formula-entry syntax selected by the interface language. Other interface languages
-/// currently use the canonical English function table until a translation table is supplied.
+/// Formula-entry syntax at the interface. The Angerô build always types formulas in Brazilian
+/// Portuguese (SOMA, SE, PROCV; `;` between arguments and a decimal comma).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FormulaLocale {
     #[default]
     En,
-    Es,
+    Pt,
 }
 
-const SPANISH: &[(&str, &str)] = &[
-    ("SUM", "SUMA"),
-    ("AVERAGE", "PROMEDIO"),
-    ("IF", "SI"),
-    ("COUNT", "CONTAR"),
-    ("SUMIF", "SUMAR.SI"),
-    ("COUNTIF", "CONTAR.SI"),
-    ("VLOOKUP", "BUSCARV"),
-    ("TODAY", "HOY"),
-    ("TRUE", "VERDADERO"),
-    ("FALSE", "FALSO"),
-];
+use crate::pt_br::PORTUGUESE;
 
 impl FormulaLocale {
     pub fn list_separator(self) -> char {
-        if self == Self::Es { ';' } else { ',' }
+        if self == Self::Pt { ';' } else { ',' }
     }
     pub fn decimal_separator(self) -> char {
-        if self == Self::Es { ',' } else { '.' }
+        if self == Self::Pt { ',' } else { '.' }
     }
     pub fn array_column_separator(self) -> char {
-        if self == Self::Es { '\\' } else { ',' }
+        if self == Self::Pt { '\\' } else { ',' }
     }
     pub fn function_name(self, canonical: &str) -> &str {
-        if self == Self::Es {
-            SPANISH.iter().find(|(en, _)| en.eq_ignore_ascii_case(canonical)).map(|(_, es)| *es).unwrap_or(canonical)
+        if self == Self::Pt {
+            PORTUGUESE.iter().find(|(en, _)| en.eq_ignore_ascii_case(canonical)).map(|(_, pt)| *pt).unwrap_or(canonical)
         } else {
             canonical
         }
     }
     pub fn canonical_name(self, localized: &str) -> &str {
-        if self == Self::Es {
-            SPANISH.iter().find(|(_, es)| es.eq_ignore_ascii_case(localized)).map(|(en, _)| *en).unwrap_or(localized)
+        if self == Self::Pt {
+            PORTUGUESE.iter().find(|(_, pt)| pt.to_lowercase() == localized.to_lowercase()).map(|(en, _)| *en).unwrap_or(localized)
         } else {
             localized
         }
@@ -54,7 +43,7 @@ impl FormulaLocale {
 /// LET/LAMBDA bindings take precedence over aliases. File and API syntax uses [`crate::parse`].
 pub fn parse_input(src: &str, locale: FormulaLocale, known_name: impl Fn(&str) -> bool) -> Result<Expr, ParseError> {
     let mut expr = parser::parse_syntax(src, locale)?;
-    if locale == FormulaLocale::Es {
+    if locale == FormulaLocale::Pt {
         normalize(&mut expr, &known_name, &mut Vec::new(), 0, false)?;
     }
     Ok(expr)
@@ -115,7 +104,7 @@ pub fn print_input(expr: &Expr, locale: FormulaLocale, known_name: impl Fn(&str)
 }
 
 pub(crate) fn boolean_alias(name: &str) -> Option<bool> {
-    if name.eq_ignore_ascii_case("VERDADERO") {
+    if name.eq_ignore_ascii_case("VERDADEIRO") {
         Some(true)
     } else if name.eq_ignore_ascii_case("FALSO") {
         Some(false)
@@ -131,7 +120,7 @@ fn normalize(expr: &mut Expr, known_name: &impl Fn(&str) -> bool, bindings: &mut
     let bound = |name: &str, bindings: &[String]| bindings.iter().rev().any(|n| n.eq_ignore_ascii_case(name)) || known_name(name);
     match expr {
         Expr::Bool(value) if display => {
-            let alias = if *value { "VERDADERO" } else { "FALSO" };
+            let alias = if *value { "VERDADEIRO" } else { "FALSO" };
             if !bound(alias, bindings) {
                 *expr = Expr::Name(alias.into());
             }
@@ -170,7 +159,7 @@ fn normalize(expr: &mut Expr, known_name: &impl Fn(&str) -> bool, bindings: &mut
             bindings.truncate(saved);
         }
         Expr::Call(name, args) => {
-            let alias = if display { FormulaLocale::Es.function_name(name) } else { FormulaLocale::Es.canonical_name(name) };
+            let alias = if display { FormulaLocale::Pt.function_name(name) } else { FormulaLocale::Pt.canonical_name(name) };
             if !bound(name, bindings) && (!display || !bound(alias, bindings)) {
                 *name = alias.to_string();
             }

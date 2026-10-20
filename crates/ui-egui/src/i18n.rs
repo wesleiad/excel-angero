@@ -108,8 +108,9 @@ impl Language {
         }
     }
 
+    /// Office Angerô: fórmulas sempre em português, qualquer que seja o idioma da interface.
     pub fn formula_locale(self) -> gridcraft_engine::formula::FormulaLocale {
-        if self == Self::Es { gridcraft_engine::formula::FormulaLocale::Es } else { gridcraft_engine::formula::FormulaLocale::En }
+        gridcraft_engine::formula::FormulaLocale::Pt
     }
 
     /// Translates an interface label; untranslated labels fall back to English.
