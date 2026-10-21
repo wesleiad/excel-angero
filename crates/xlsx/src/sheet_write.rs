@@ -363,7 +363,8 @@ pub fn write_sheet(wb: &Workbook, si: usize, selected: bool, out: &mut Out) -> (
         }
     }
     for (i, cf) in sheet.cond_formats.iter().enumerate() {
-        if cf.ranges.is_empty() {
+        // Icon sets with custom icons are written in the Excel 2010 extension below.
+        if cf.ranges.is_empty() || custom_icons(cf) {
             continue;
         }
         let _ = write!(
@@ -584,10 +585,17 @@ pub fn write_sheet(wb: &Workbook, si: usize, selected: bool, out: &mut Out) -> (
         .filter(|(_, cf)| !cf.ranges.is_empty() && matches!(cf.rule, CfRule::DataBar { gradient: false, .. }))
         .map(|(i, cf)| (cf, prio.get(i).copied().unwrap_or(1)))
         .collect();
-    if !solid_bars.is_empty() || !sheet.sparklines.is_empty() {
+    let icon_sets: Vec<(&CondFormat, u32)> = sheet
+        .cond_formats
+        .iter()
+        .enumerate()
+        .filter(|(_, cf)| !cf.ranges.is_empty() && custom_icons(cf))
+        .map(|(i, cf)| (cf, prio.get(i).copied().unwrap_or(1)))
+        .collect();
+    if !solid_bars.is_empty() || !icon_sets.is_empty() || !sheet.sparklines.is_empty() {
         s.push_str("<extLst>");
     }
-    if !solid_bars.is_empty() {
+    if !solid_bars.is_empty() || !icon_sets.is_empty() {
         let _ = write!(
             s,
             "<ext uri=\"{{78C0D931-6437-407d-A8A1-0F90B4350D7D}}\" xmlns:x14=\"{X14_NS}\" xmlns:xm=\"{XM_NS}\"><x14:conditionalFormattings>"
@@ -597,6 +605,24 @@ pub fn write_sheet(wb: &Workbook, si: usize, selected: bool, out: &mut Out) -> (
                 let (id, lo, hi) = (solid_bar_id(*p), x14_cfvo(min), x14_cfvo(max));
                 let _ = write!(s, "<x14:conditionalFormatting><x14:cfRule type=\"dataBar\" id=\"{id}\"><x14:dataBar gradient=\"0\">{lo}{hi}");
                 let _ = write!(s, "</x14:dataBar></x14:cfRule><xm:sqref>{}</xm:sqref></x14:conditionalFormatting>", sqref(&cf.ranges));
+            }
+        }
+        for (cf, p) in &icon_sets {
+            if let CfRule::IconSet { set, thresholds, reverse, show_value, icons } = &cf.rule {
+                let _ = write!(
+                    s,
+                    "<x14:conditionalFormatting><x14:cfRule type=\"iconSet\" priority=\"{p}\" id=\"{{00000000-0000-0000-0001-{p:012}}}\"><x14:iconSet iconSet=\"{}\" custom=\"1\"{}{}>",
+                    esc_attr(set),
+                    if *reverse { " reverse=\"1\"" } else { "" },
+                    if *show_value { "" } else { " showValue=\"0\"" }
+                );
+                for t in icon_cfvos(set, thresholds) {
+                    s.push_str(&x14_cfvo(&t));
+                }
+                for (icon_set, id) in icons {
+                    let _ = write!(s, "<x14:cfIcon iconSet=\"{}\" iconId=\"{id}\"/>", esc_attr(icon_set));
+                }
+                let _ = write!(s, "</x14:iconSet></x14:cfRule><xm:sqref>{}</xm:sqref></x14:conditionalFormatting>", sqref(&cf.ranges));
             }
         }
         s.push_str("</x14:conditionalFormattings></ext>");
@@ -622,7 +648,7 @@ pub fn write_sheet(wb: &Workbook, si: usize, selected: bool, out: &mut Out) -> (
         }
         s.push_str("</x14:sparklineGroups></ext>");
     }
-    if !solid_bars.is_empty() || !sheet.sparklines.is_empty() {
+    if !solid_bars.is_empty() || !icon_sets.is_empty() || !sheet.sparklines.is_empty() {
         s.push_str("</extLst>");
     }
     s.push_str("</worksheet>");
@@ -748,6 +774,22 @@ const X14_NS: &str = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/m
 const XM_NS: &str = "http://schemas.microsoft.com/office/excel/2006/main";
 
 /// The id linking a solid data bar's `cfRule` to its x14 extension; unique per sheet because priorities are.
+/// An icon set whose icons were picked one by one (Excel 2010 `custom="1"`).
+fn custom_icons(cf: &CondFormat) -> bool {
+    matches!(&cf.rule, CfRule::IconSet { icons, .. } if !icons.is_empty())
+}
+
+/// One threshold per icon, the first being the lower bound (CT_IconSet needs them all).
+fn icon_cfvos(set: &str, thresholds: &[CfValueKind]) -> Vec<CfValueKind> {
+    let k = icon_count(set);
+    let defaults = default_icon_thresholds(set);
+    match thresholds.len() {
+        n if n == k => thresholds.to_vec(),
+        n if n + 1 == k => defaults.iter().take(1).chain(thresholds).cloned().collect(),
+        _ => defaults,
+    }
+}
+
 fn solid_bar_id(priority: u32) -> String {
     format!("{{00000000-0000-0000-0000-{priority:012}}}")
 }
@@ -874,7 +916,7 @@ fn cf_rule_xml(cf: &CondFormat, priority: u32, out: &mut Out) -> String {
             if *color == Color::Auto { "rgb=\"FF638EC6\"".to_string() } else { color_attrs(color) },
             if *gradient { String::new() } else { solid_bar_ext(priority) }
         ),
-        CfRule::IconSet { set, thresholds, reverse, show_value } => {
+        CfRule::IconSet { set, thresholds, reverse, show_value, .. } => {
             let mut b = format!("<iconSet iconSet=\"{}\"", esc_attr(set));
             if *reverse {
                 b.push_str(" reverse=\"1\"");

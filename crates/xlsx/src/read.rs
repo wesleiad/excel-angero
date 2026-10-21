@@ -349,7 +349,7 @@ pub fn read_xlsx(bytes: &[u8]) -> Result<(Workbook, ReadReport), IoError> {
 pub(crate) fn unique_name(wb: &Workbook, name: &str, i: usize) -> String {
     let mut base: String = name.chars().filter(|c| !matches!(c, ':' | '\\' | '/' | '?' | '*' | '[' | ']')).take(31).collect();
     if base.trim().is_empty() {
-        base = format!("Sheet{}", i + 1);
+        base = format!("{}{}", gridcraft_model::sheet_prefix(), i + 1);
     }
     if wb.sheet_index(&base).is_none() {
         return base;

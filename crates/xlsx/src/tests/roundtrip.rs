@@ -158,6 +158,7 @@ fn sample() -> Workbook {
             thresholds: vec![CfValueKind::Percent(0.0), CfValueKind::Percent(33.0), CfValueKind::Percent(67.0)],
             reverse: true,
             show_value: false,
+            icons: vec![],
         },
     ];
     for (i, rule) in cfs.into_iter().enumerate() {
@@ -828,7 +829,7 @@ fn icon_sets_always_write_one_cfvo_per_icon() {
     {
         s.cond_formats.push(CondFormat {
             ranges: vec![rr(&format!("A{}", i + 1))],
-            rule: CfRule::IconSet { set: set.into(), thresholds, reverse: false, show_value: true },
+            rule: CfRule::IconSet { set: set.into(), thresholds, reverse: false, show_value: true, icons: vec![] },
             priority: i as u32 + 1,
             stop_if_true: false,
         });
@@ -858,6 +859,44 @@ fn icon_sets_always_write_one_cfvo_per_icon() {
         })
         .collect();
     assert_eq!(rules, [3, 4, 5]);
+}
+
+/// Angerô: an Excel 2010 icon set with icons picked one by one (✗ ✓ ✗ from 3Symbols2) lives only
+/// in the x14 extension; it is read without the "extensions were skipped" warning and written back there.
+#[test]
+fn custom_icon_sets_round_trip_through_the_x14_extension() {
+    let mut wb = Workbook::new();
+    let icons = vec![("3Symbols2".to_string(), 0), ("3Symbols2".to_string(), 2), ("3Symbols2".to_string(), 0)];
+    wb.sheet_mut(0).unwrap().cond_formats.push(CondFormat {
+        ranges: vec![rr("T3:T10")],
+        rule: CfRule::IconSet {
+            set: "3Symbols2".into(),
+            thresholds: vec![CfValueKind::Percent(0.0), CfValueKind::Number(-0.06), CfValueKind::Number(0.06)],
+            reverse: false,
+            show_value: true,
+            icons: icons.clone(),
+        },
+        priority: 1,
+        stop_if_true: false,
+    });
+    let bytes = write_xlsx(&wb).unwrap();
+    let (xml, _) = sheet1_xml(&bytes);
+    assert!(!xml.contains("<conditionalFormatting "), "custom icons are not written in the 2006 namespace: {xml}");
+    assert!(xml.contains("<x14:iconSet iconSet=\"3Symbols2\" custom=\"1\">"), "{xml}");
+    assert!(xml.contains("<x14:cfIcon iconSet=\"3Symbols2\" iconId=\"2\"/>"), "{xml}");
+    let (back, report) = read_xlsx(&bytes).unwrap();
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+    let cf = &back.sheet(0).unwrap().cond_formats;
+    assert_eq!(cf.len(), 1);
+    assert_eq!(cf[0].ranges, vec![rr("T3:T10")]);
+    match &cf[0].rule {
+        CfRule::IconSet { set, thresholds, icons: back_icons, .. } => {
+            assert_eq!(set, "3Symbols2");
+            assert_eq!(thresholds.len(), 3);
+            assert_eq!(back_icons, &icons);
+        }
+        other => panic!("{other:?}"),
+    }
 }
 
 /// Files have no `@` operator: Excel writes `@x` as `_xlfn.SINGLE(x)` in a dynamic-array

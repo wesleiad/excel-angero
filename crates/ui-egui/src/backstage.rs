@@ -879,8 +879,8 @@ pub fn export_as(app: &mut SheetApp, fmt: &str) -> bool {
         "html" => "file.exportHtml",
         _ => return false,
     };
-    let title = app.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-    let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
+    let title = app.session.active().map(|d| d.display_title()).unwrap_or_else(|| format!("{}1", gridcraft_engine::model::book_prefix()));
+    let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Pasta1").to_string();
     if let Some(pick) = &app.services.pick_save {
         let Some(path) = pick(&format!("{stem}.{fmt}")) else { return false };
         // The picker may suggest a workbook extension; the export writes the chosen format.

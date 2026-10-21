@@ -300,13 +300,14 @@ impl Session {
     }
     /// A new blank workbook titled `BookN`.
     pub fn new_workbook(&mut self) -> usize {
-        let n = (1..).find(|n| !self.docs.iter().any(|d| d.title == format!("Book{n}") && d.path.is_none())).unwrap_or(1);
+        let book = gridcraft_model::book_prefix();
+        let n = (1..).find(|n| !self.docs.iter().any(|d| d.title == format!("{book}{n}") && d.path.is_none())).unwrap_or(1);
         let mut wb = Workbook::new();
         for _ in 1..self.prefs.sheets_in_new_workbook.clamp(1, 255) {
             let name = wb.next_sheet_name();
             wb.sheets.push(Arc::new(gridcraft_model::Sheet::new(name)));
         }
-        self.add_document(DocState::new(wb, None, format!("Book{n}")))
+        self.add_document(DocState::new(wb, None, format!("{book}{n}")))
     }
 
     pub fn commands(&self) -> Vec<CommandInfo> {

@@ -647,6 +647,7 @@ fn read_cf(cx: &mut Ctx<'_>, e: &El, sheet: &mut Sheet) {
                     thresholds: cfvos(is),
                     reverse: is.flag("reverse", false),
                     show_value: is.flag("showValue", true),
+                    icons: vec![],
                 }
             }
             other => {
@@ -980,15 +981,37 @@ fn read_ext(cx: &mut Ctx<'_>, e: &El, sheet: &mut Sheet) {
                 }
                 "conditionalFormattings" => {
                     let mut skipped = false;
-                    for r in c.kids("conditionalFormatting").flat_map(|f| f.kids("cfRule")) {
-                        let idx = r.attr("id").and_then(|id| cx.cf_ext_ids.iter().find(|(i, _)| i == id)).map(|(_, n)| *n);
-                        match (idx.and_then(|n| sheet.cond_formats.get_mut(n)), r.child("dataBar")) {
-                            (Some(CondFormat { rule: CfRule::DataBar { gradient, .. }, .. }), Some(db)) => {
-                                *gradient = db.flag("gradient", true);
-                                // Only the fill style is modelled; borders, lengths, axis or negative colours are lost.
-                                skipped |= db.attrs.iter().any(|(k, _)| k != "gradient") || db.children.iter().any(|k| k.name != "cfvo");
+                    for f in c.kids("conditionalFormatting") {
+                        let ranges = parse_sqref(f.child("sqref").map(|q| q.text.trim()));
+                        for r in f.kids("cfRule") {
+                            let idx = r.attr("id").and_then(|id| cx.cf_ext_ids.iter().find(|(i, _)| i == id)).map(|(_, n)| *n);
+                            match (idx.and_then(|n| sheet.cond_formats.get_mut(n)), r.child("dataBar")) {
+                                (Some(CondFormat { rule: CfRule::DataBar { gradient, .. }, .. }), Some(db)) => {
+                                    *gradient = db.flag("gradient", true);
+                                    // Only the fill style is modelled; borders, lengths, axis or negative colours are lost.
+                                    skipped |= db.attrs.iter().any(|(k, _)| k != "gradient") || db.children.iter().any(|k| k.name != "cfvo");
+                                }
+                                // Angerô: icon sets with custom icons (Excel 2010) exist only in this extension.
+                                (None, _) if r.attr("type") == Some("iconSet") && !ranges.is_empty() => match r.child("iconSet") {
+                                    Some(is) => sheet.cond_formats.push(CondFormat {
+                                        ranges: ranges.clone(),
+                                        rule: CfRule::IconSet {
+                                            set: is.attr("iconSet").unwrap_or("3TrafficLights1").to_string(),
+                                            thresholds: cfvos(is),
+                                            reverse: is.flag("reverse", false),
+                                            show_value: is.flag("showValue", true),
+                                            icons: is
+                                                .kids("cfIcon")
+                                                .map(|i| (i.attr("iconSet").unwrap_or("NoIcons").to_string(), i.attr_u32("iconId").unwrap_or(0)))
+                                                .collect(),
+                                        },
+                                        priority: r.attr_u32("priority").unwrap_or(0),
+                                        stop_if_true: false,
+                                    }),
+                                    None => skipped = true,
+                                },
+                                _ => skipped = true,
                             }
-                            _ => skipped = true,
                         }
                     }
                     if skipped {

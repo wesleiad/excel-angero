@@ -55,7 +55,7 @@ fn comments(app: &mut SheetApp, ui: &mut Ui) {
     let Some(sh) = d.wb.active() else { return };
     let list: Vec<(String, gridcraft_engine::model::Comment)> = sh.comments.iter().map(|(c, m)| (c.a1(), m.clone())).collect();
     if list.is_empty() {
-        ui.label(egui::RichText::new("No comments on this sheet yet. Select a cell and choose New Comment.").italics());
+        ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("No comments on this sheet yet. Select a cell and choose New Comment.")).italics());
     }
     for (cell, c) in list {
         egui::Frame::NONE
@@ -72,7 +72,7 @@ fn comments(app: &mut SheetApp, ui: &mut Ui) {
                     }
                     ui.label(egui::RichText::new(&c.author).color(Color32::from_gray(90)));
                     if c.resolved {
-                        ui.label(egui::RichText::new("Resolved").small().color(Color32::from_rgb(0x10, 0x7C, 0x41)));
+                        ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("Resolved")).small().color(Color32::from_rgb(0x10, 0x7C, 0x41)));
                     }
                 });
                 ui.label(&c.text);
@@ -137,7 +137,7 @@ fn selection(app: &mut SheetApp, ui: &mut Ui) {
     let list = app.session.run("arrange.selectionPane", json!({})).unwrap_or(Json::Null);
     let items = list.as_array().cloned().unwrap_or_default();
     if items.is_empty() {
-        ui.label(egui::RichText::new("There are no shapes, pictures or charts on this sheet.").italics());
+        ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("There are no shapes, pictures or charts on this sheet.")).italics());
     }
     for it in items.iter().rev() {
         let kind = it["kind"].as_str().unwrap_or("").to_string();
@@ -147,13 +147,13 @@ fn selection(app: &mut SheetApp, ui: &mut Ui) {
             if ui.selectable_label(sel, it["name"].as_str().unwrap_or("")).clicked() {
                 app.selected_chart = Some(id);
             }
-            if ui.small_button("▲").on_hover_text("Bring Forward").clicked() {
+            if ui.small_button("▲").on_hover_text(crate::i18n::current(ui.ctx()).tr("Bring Forward")).clicked() {
                 app.run_or_alert("arrange.bringForward", json!({"kind": kind, "id": id}));
             }
-            if ui.small_button("▼").on_hover_text("Send Backward").clicked() {
+            if ui.small_button("▼").on_hover_text(crate::i18n::current(ui.ctx()).tr("Send Backward")).clicked() {
                 app.run_or_alert("arrange.sendBackward", json!({"kind": kind, "id": id}));
             }
-            if ui.small_button("✕").on_hover_text("Delete").clicked() {
+            if ui.small_button("✕").on_hover_text(crate::i18n::current(ui.ctx()).tr("Delete")).clicked() {
                 app.run_or_alert("object.delete", json!({"kind": kind, "id": id}));
             }
         });
@@ -162,7 +162,7 @@ fn selection(app: &mut SheetApp, ui: &mut Ui) {
 
 fn format_chart(app: &mut SheetApp, ui: &mut Ui) {
     let Some(id) = app.selected_chart else {
-        ui.label(egui::RichText::new("Select a chart to format it.").italics());
+        ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("Select a chart to format it.")).italics());
         return;
     };
     let Some(chart) = app.session.active().and_then(|d| d.wb.active().and_then(|s| s.charts.iter().find(|c| c.id == id).cloned())) else {

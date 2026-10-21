@@ -1140,7 +1140,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         d.values.insert("alt".into(), json!(alt));
                     }
                     if d.values.get("placement").and_then(Json::as_str) == Some("cell") {
-                        ui.label(egui::RichText::new("Fits inside the selected cell and moves with its content.").small());
+                        ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("Fits inside the selected cell and moves with its content.")).small());
                     }
                     ok_cancel(ui, &mut confirm, &mut open);
                 }
@@ -1251,7 +1251,7 @@ pub fn show(app: &mut SheetApp, ctx: &egui::Context) {
                         }
                     });
                     ui.separator();
-                    ui.label(egui::RichText::new("Recent").strong());
+                    ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("Recent")).strong());
                     for path in app.ui.recent.clone() {
                         if ui.link(&path).clicked() {
                             app.open_path(&path);
@@ -2041,7 +2041,7 @@ fn name_manager(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, open: &mu
             ui.strong("Scope");
             ui.end_row();
             if names.is_empty() {
-                ui.label(egui::RichText::new("No names defined").italics());
+                ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("No names defined")).italics());
                 ui.end_row();
             }
             for (i, n) in names.iter().enumerate() {
@@ -2436,7 +2436,7 @@ fn analysis_toolpak(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confi
     }
     let tool = d.values.get("tool").and_then(Json::as_str).unwrap_or("").to_string();
     let Some((_, label)) = TOOLS.iter().find(|(id, _)| *id == tool) else {
-        ui.label(egui::RichText::new("Analysis Tools").strong());
+        ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("Analysis Tools")).strong());
         let pick = d.values.get("pick").and_then(Json::as_str).unwrap_or("").to_string();
         let mut chosen = false;
         egui::ScrollArea::vertical().max_height(260.0).show(ui, |ui| {
@@ -2463,7 +2463,7 @@ fn analysis_toolpak(app: &mut SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confi
     d.fields = toolpak_fields(&tool);
     form_fields(ui, d);
     ui.separator();
-    ui.label(egui::RichText::new("Output options").strong());
+    ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("Output options")).strong());
     let to = d.values.get("outputTo").and_then(Json::as_str).unwrap_or("newSheet").to_string();
     for (key, choice, text_label) in [("output", "range", "Output Range:"), ("newSheet", "newSheet", "New Worksheet Ply:")] {
         ui.horizontal(|ui| {

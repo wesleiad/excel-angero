@@ -27,6 +27,7 @@ pub mod panes;
 pub mod paper_view;
 pub mod pivot_pane;
 pub mod printing;
+pub mod janela;
 pub mod ribbon;
 pub mod selection_glide;
 pub mod tabs;
@@ -509,7 +510,7 @@ impl SheetApp {
         if let Some(dl) = &self.services.download
             && let Some(b) = result.get("base64").and_then(Json::as_str).and_then(gridcraft_engine::io::base64_decode)
         {
-            let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
+            let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| format!("{}1", gridcraft_engine::model::book_prefix()));
             dl(&std::path::Path::new(&title).with_extension("pdf").to_string_lossy(), &b);
         }
     }
@@ -546,8 +547,8 @@ impl SheetApp {
         if !self.commit_edit(0, 0, false, false) {
             return;
         }
-        let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
-        let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Book1").to_string();
+        let title = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| format!("{}1", gridcraft_engine::model::book_prefix()));
+        let stem = std::path::Path::new(&title).file_stem().and_then(|s| s.to_str()).unwrap_or("Pasta1").to_string();
         let Some(pick) = &self.services.pick_save else { return };
         let Some(path) = pick(&format!("{stem}.pdf")) else { return };
         // The picker may suggest a workbook extension; the export writes a PDF.
@@ -782,7 +783,7 @@ impl SheetApp {
                 }
             }
             "saveAs" => {
-                let suggested = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| "Book1".into());
+                let suggested = self.session.active().map(|d| d.display_title()).unwrap_or_else(|| format!("{}1", gridcraft_engine::model::book_prefix()));
                 if let Some(pick) = &self.services.pick_save {
                     if let Some(path) = pick(&suggested) {
                         let path = if std::path::Path::new(&path).extension().is_none() { format!("{path}.xlsx") } else { path };
@@ -918,15 +919,16 @@ impl SheetApp {
         let vba: Vec<&str> = msgs.iter().copied().filter(|m| m.to_lowercase().contains("macro") || m.contains("VBA")).collect();
         if !vba.is_empty() {
             self.notice = Some(Notice {
-                text: "This workbook contains VBA macros. Excel keeps them intact when you save, but does not run them.".into(),
+                text: "Esta pasta de trabalho contém macros VBA. O Excel as mantém ao salvar, mas não as executa.".into(),
                 kind: NoticeKind::Warning,
-                action: Some(("What this means".into(), "macros".into())),
+                action: Some(("O que isso significa".into(), "macros".into())),
             });
         } else {
+            // Angerô: the details stay in English (they name Excel features); the sentence is Portuguese.
             let text = if msgs.len() == 1 {
-                msgs[0].to_string()
+                format!("A planilha abriu, mas um recurso dela não é suportado e foi ignorado: {}", msgs[0])
             } else {
-                format!("{} items in this file were handled differently. First: {}", msgs.len(), msgs[0])
+                format!("A planilha abriu, mas {} recursos dela não são suportados e foram ignorados. Primeiro: {}", msgs.len(), msgs[0])
             };
             self.notice = Some(Notice { text, kind: NoticeKind::Info, action: None });
         }

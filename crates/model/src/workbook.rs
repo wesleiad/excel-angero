@@ -1,6 +1,7 @@
 //! Workbooks.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use gridcraft_core::DateSystem;
 use gridcraft_formula::Expr;
@@ -128,11 +129,29 @@ impl Default for Workbook {
     }
 }
 
+static NOMES_EM_PORTUGUES: AtomicBool = AtomicBool::new(false);
+
+/// Angerô: new workbooks and sheets are named like Excel pt-BR ("Pasta1", "Planilha1").
+/// The app turns it on at start-up; tests keep the English names.
+pub fn usar_nomes_em_portugues() {
+    NOMES_EM_PORTUGUES.store(true, Ordering::Relaxed);
+}
+
+/// Prefix of default sheet names (`Sheet` / `Planilha`).
+pub fn sheet_prefix() -> &'static str {
+    if NOMES_EM_PORTUGUES.load(Ordering::Relaxed) { "Planilha" } else { "Sheet" }
+}
+
+/// Prefix of default workbook titles (`Book` / `Pasta`).
+pub fn book_prefix() -> &'static str {
+    if NOMES_EM_PORTUGUES.load(Ordering::Relaxed) { "Pasta" } else { "Book" }
+}
+
 impl Workbook {
     /// A new workbook with one sheet, "Sheet1".
     pub fn new() -> Workbook {
         Workbook {
-            sheets: vec![Arc::new(Sheet::new("Sheet1"))],
+            sheets: vec![Arc::new(Sheet::new(format!("{}1", sheet_prefix())))],
             names: vec![],
             styles: StyleTable::default(),
             theme: Theme::default(),
@@ -164,7 +183,7 @@ impl Workbook {
     }
     /// A fresh sheet name `SheetN` not in use.
     pub fn next_sheet_name(&self) -> String {
-        (1..).map(|n| format!("Sheet{n}")).find(|n| self.sheet_index(n).is_none()).unwrap_or_else(|| "Sheet".into())
+        (1..).map(|n| format!("{}{n}", sheet_prefix())).find(|n| self.sheet_index(n).is_none()).unwrap_or_else(|| sheet_prefix().into())
     }
     /// Validates a sheet name like Excel: 1–31 chars, none of `: \ / ? * [ ]`, not starting or
     /// ending with `'`, unique (case-insensitive) unless it is `except`'s own name.

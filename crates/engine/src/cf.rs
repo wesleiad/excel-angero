@@ -256,7 +256,7 @@ impl CfCache {
                     }
                     None
                 }
-                CfRule::IconSet { set, thresholds, reverse, show_value } => {
+                CfRule::IconSet { set, thresholds, reverse, show_value, icons } => {
                     if let Some(n) = v.as_f64() {
                         let k = icon_count(set);
                         // One threshold per icon, the first being the lower bound (as in the file);
@@ -276,7 +276,11 @@ impl CfCache {
                             idx = k - 1 - idx.min(k - 1);
                         }
                         if out.icon.is_none() {
-                            out.icon = Some((set.clone(), idx.min(k - 1)));
+                            let pos = idx.min(k - 1);
+                            let (shown, i) = icons.get(pos).map_or_else(|| (set.clone(), pos), |(s, i)| (s.clone(), *i as usize));
+                            if shown != "NoIcons" {
+                                out.icon = Some((shown, i));
+                            }
                             out.hide_value |= !show_value;
                             any = true;
                         }

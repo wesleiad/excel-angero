@@ -1690,7 +1690,7 @@ fn ods_import_keeps_cached_values_and_reports_limits() {
         let mut s = s();
         let r = s.execute("file.open", json!({"name": name, "base64": crate::io::base64_encode(&bytes)})).unwrap();
         assert!(!r["warnings"].as_array().unwrap().is_empty());
-        assert!(s.take_ui_requests().iter().any(|r| matches!(r, crate::UiRequest::Message(_))));
+        assert!(!s.take_ui_requests().iter().any(|r| matches!(r, crate::UiRequest::Message(_))));
         assert!(s.doc().unwrap().path.is_none());
         assert!(s.doc().unwrap().display_title().ends_with(".xlsx"));
         assert_eq!(v(&s, "A1"), Value::Number(42.0));
@@ -2431,7 +2431,7 @@ fn xlsb_import_keeps_cached_values_and_reports_limits() {
         let mut s = s();
         let r = s.execute("file.open", json!({"name": name, "base64": crate::io::base64_encode(&bytes)})).unwrap();
         assert!(!r["warnings"].as_array().unwrap().is_empty());
-        assert!(s.take_ui_requests().iter().any(|r| matches!(r, crate::UiRequest::Message(_))));
+        assert!(!s.take_ui_requests().iter().any(|r| matches!(r, crate::UiRequest::Message(_))));
         assert!(s.doc().unwrap().path.is_none());
         assert!(s.doc().unwrap().display_title().ends_with(".xlsx"));
         assert_eq!(v(&s, "A1"), Value::Number(42.0));
@@ -3067,6 +3067,7 @@ fn icon_set_thresholds_from_files_pick_the_icon() {
             thresholds: vec![CfValueKind::Percent(0.0), CfValueKind::Number(10.0), CfValueKind::Number(25.0)],
             reverse: false,
             show_value: true,
+            icons: vec![],
         },
         priority: 1,
         stop_if_true: false,

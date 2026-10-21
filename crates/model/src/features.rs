@@ -221,6 +221,10 @@ pub enum CfRule {
         thresholds: Vec<CfValueKind>,
         reverse: bool,
         show_value: bool,
+        /// Excel 2010 custom icons: the icon at each position as (set, index in that set), e.g.
+        /// `("3Symbols2", 0)`; `"NoIcons"` shows none. Empty = the set's own icons.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        icons: Vec<(String, u32)>,
     },
 }
 

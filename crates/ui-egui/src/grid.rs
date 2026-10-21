@@ -1547,6 +1547,32 @@ fn paint_cf_icon(p: &Painter, r: Rect, set: &str, idx: usize) {
             1.0,
             Color32::from_rgb(0x2B, 0x7C, 0xD3),
         );
+    } else if lower.contains("symbol") {
+        // Angerô: ✗ / ! / ✓, in a filled circle for 3Symbols and bare for 3Symbols2 (as in Excel).
+        let circled = lower == "3symbols";
+        let c = r.center();
+        let s = r.width() / 2.0 * if circled { 0.45 } else { 0.75 };
+        let ink = if circled {
+            p.circle_filled(c, r.width() / 2.0 - 0.5, col);
+            Color32::WHITE
+        } else {
+            col
+        };
+        let st = Stroke::new(if circled { 1.6 } else { 2.2 }, ink);
+        match idx {
+            0 => {
+                p.line_segment([pos2(c.x - s, c.y - s), pos2(c.x + s, c.y + s)], st);
+                p.line_segment([pos2(c.x - s, c.y + s), pos2(c.x + s, c.y - s)], st);
+            }
+            1 if n == 3 => {
+                p.line_segment([pos2(c.x, c.y - s), pos2(c.x, c.y + 0.35 * s)], st);
+                p.circle_filled(pos2(c.x, c.y + 0.85 * s), st.width * 0.6, ink);
+            }
+            _ => {
+                p.line_segment([pos2(c.x - s, c.y), pos2(c.x - 0.25 * s, c.y + 0.7 * s)], st);
+                p.line_segment([pos2(c.x - 0.25 * s, c.y + 0.7 * s), pos2(c.x + s, c.y - 0.7 * s)], st);
+            }
+        }
     } else {
         p.circle_filled(r.center(), r.width() / 2.0 - 0.5, col);
     }
@@ -2822,7 +2848,7 @@ fn filter_menu(app: &mut SheetApp, ui: &mut egui::Ui, geo: &Geo, was_open: bool)
                 close = true;
             }
             ui.separator();
-            ui.label(egui::RichText::new("Filter").strong());
+            ui.label(egui::RichText::new(crate::i18n::current(ui.ctx()).tr("Filter")).strong());
             let mut checks: Vec<(String, bool)> = ui.ctx().data_mut(|d| d.get_temp::<Vec<(String, bool)>>(key)).unwrap_or(values.clone());
             // A search narrows the list; Select All and Apply then only cover the matches.
             let mut search: String = ui.ctx().data_mut(|d| d.get_temp(search_key)).unwrap_or_default();

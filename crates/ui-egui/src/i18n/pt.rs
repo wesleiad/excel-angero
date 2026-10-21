@@ -955,6 +955,18 @@ pub(super) fn translate(text: &str) -> Option<&'static str> {
         "Protect\nSheet" => "Proteger\nPlanilha",
         "Watch\nWindow" => "Janela de\nInspeção",
         "Workbook\nStatistics" => "Estatísticas da\nPasta de Trabalho",
+        "Reverse the order" => "Inverter a ordem",
+        "No comments on this sheet yet. Select a cell and choose New Comment." => "Ainda não há comentários nesta planilha. Selecione uma célula e escolha Novo Comentário.",
+        "Resolved" => "Resolvido",
+        "There are no shapes, pictures or charts on this sheet." => "Não há formas, imagens ou gráficos nesta planilha.",
+        "Bring Forward" => "Avançar",
+        "Send Backward" => "Recuar",
+        "Select a chart to format it." => "Selecione um gráfico para formatá-lo.",
+        "AutoSave: save after every change (workbooks saved to a file)" => "Salvamento Automático: salva a cada alteração (pastas de trabalho já salvas em arquivo)",
+        "Table Name:" => "Nome da Tabela:",
+        "Macros preserved (not executed)" => "Macros preservadas (não executadas)",
+        "Theme Colors" => "Cores do Tema",
+        "Standard Colors" => "Cores Padrão",
         _ => return None,
     })
 }
