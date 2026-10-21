@@ -38,8 +38,9 @@ const _: () = assert!(TITLE_CONTROL_H < TITLE_BAR_H, "title-bar controls keep a 
 pub fn title_bar(app: &mut SheetApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let ch = TITLE_CONTROL_H;
-    egui::Panel::top("title_bar").exact_size(TITLE_BAR_H).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
+    egui::Panel::top("title_bar").show_separator_line(!crate::janela::SEM_BARRA_DO_SISTEMA).exact_size(TITLE_BAR_H).frame(egui::Frame::NONE.fill(t.window)).show(ui, |ui| {
         let rect = ui.max_rect();
+        crate::janela::fundo_mica(ui, rect, t.window);
         // Dragging the empty title area moves the window.
         let bg = ui.interact(rect, ui.id().with("drag_title"), Sense::click_and_drag());
         if bg.drag_started() {
@@ -171,6 +172,9 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
         .exact_size(h)
         .frame(egui::Frame::NONE.fill(t.window).inner_margin(egui::Margin { left: 10, right: 10, top: 0, bottom: 6 }))
         .show(ui, |ui| {
+            // Angerô: Mica continues from the title bar (the frame's margins are outside max_rect).
+            let r = ui.max_rect();
+            crate::janela::fundo_mica(ui, Rect::from_min_max(r.min - vec2(10.0, 0.0), r.max + vec2(10.0, 6.0)), t.window);
             // Tabs row.
             let tabs_rect = Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), 32.0));
             ui.scope_builder(egui::UiBuilder::new().max_rect(tabs_rect), |ui| {
