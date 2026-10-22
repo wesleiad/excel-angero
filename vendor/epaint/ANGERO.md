@@ -1,4 +1,4 @@
-# epaint 0.36.2 — cópia com alterações do Excel - Angerô
+# epaint 0.36.2 — cópia com alterações do Office Angerô (Excel, Word, PowerPoint)
 
 Cópia do crate [`epaint`](https://github.com/emilk/egui/tree/main/crates/epaint) 0.36.2
 (MIT OR Apache-2.0, veja `LICENSE-MIT`), usada pelo `[patch.crates-io]` do `Cargo.toml` da raiz.
