@@ -1147,6 +1147,7 @@ impl SheetApp {
         self.ui.keytip_invoke = None;
         // Angerô: text sharpness (a no-op unless it changed; a change redraws the text next frame).
         egui::epaint::text::definir_foco(self.ui.foco);
+        egui::epaint::text::definir_tema_escuro(ctx.global_style().visuals.dark_mode);
         if self.fonts_han.is_some_and(|han| han != theme::HanOrder::of(self.ui.language)) {
             self.fonts_ready = false;
             self.fonts_set = false;

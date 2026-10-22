@@ -5,13 +5,14 @@
 //! grid-fitting, like classic Windows). Changing it bumps [`geracao`], which makes `Fonts` redraw
 //! every glyph and lay the text out again on the next frame.
 
-use std::sync::atomic::{AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 /// The most manual level ([`definir_foco`] clamps to it).
 pub const FOCO_MAXIMO: u8 = 5;
 
 static NIVEL: AtomicU8 = AtomicU8::new(0);
 static GERACAO: AtomicU32 = AtomicU32::new(0);
+static ESCURO: AtomicBool = AtomicBool::new(false);
 
 /// Sets the sharpness: 0 = automatic, 1 (smooth) ..= [`FOCO_MAXIMO`] (sharp).
 pub fn definir_foco(nivel: u8) {
@@ -40,4 +41,17 @@ pub fn foco_efetivo(pixels_per_point: f32) -> u8 {
         0 => 5,
         n => n,
     }
+}
+
+/// Tells the rasterizer the app is in dark mode: most text is then light on dark, which the contrast
+/// boost for dark text would swell (see `tema_escuro`).
+pub fn definir_tema_escuro(escuro: bool) {
+    if ESCURO.swap(escuro, Ordering::Relaxed) != escuro {
+        GERACAO.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// Whether [`definir_tema_escuro`] last said dark mode.
+pub fn tema_escuro() -> bool {
+    ESCURO.load(Ordering::Relaxed)
 }

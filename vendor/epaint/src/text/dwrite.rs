@@ -76,13 +76,20 @@ fn ajuste(ppp: f32) -> (Modo, f32) {
     if let Some(f) = forcado() {
         return f;
     }
-    match super::foco::foco_efetivo(ppp) {
+    let (modo, contraste) = match super::foco::foco_efetivo(ppp) {
         1 => (Modo::Simetrico, 0.0),
         2 => (Modo::CtNat, 0.25),
         3 => (Modo::CtNat, 0.5),
         4 => (Modo::CtNat, 1.0),
         _ => (Modo::CtGdi, 0.5),
+    };
+    // Dark mode on a 100 % screen: the boost and GDI-classic stems swell light-on-dark letters
+    // (the menus, the ribbon), so half a step less of each. Denser screens hide it and keep theirs.
+    if super::foco::tema_escuro() && ppp < 1.2 {
+        let modo = if modo == Modo::CtGdi { Modo::CtNat } else { modo };
+        return (modo, f32::max(contraste - 0.5, 0.0));
     }
+    (modo, contraste)
 }
 
 struct Motor {
