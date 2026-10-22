@@ -351,6 +351,9 @@ impl SheetApp {
 
     /// Sets up fonts and visuals for a specific persisted interface language.
     pub fn setup_context_for_language(ctx: &egui::Context, dark: bool, language: i18n::Language) {
+        // Angerô: the desktop app starts here, so the installed-font scan must start here too (only
+        // `setup_context` started it, and fonts like Arial never bound: the cell kept its font).
+        fonts::start_scan();
         ctx.set_fonts(theme::font_definitions_for_language(language));
         theme::apply(ctx, dark);
     }
@@ -1252,6 +1255,7 @@ impl SheetApp {
         }
         if self.chrome.title_bar {
             ribbon::title_bar(self, ui);
+            janela::bordas(&ctx);
         }
         if self.backstage.is_some() {
             // File tab: the Backstage view replaces everything below the title bar.

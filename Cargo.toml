@@ -79,3 +79,5 @@ debug = 0
 # Angerô: epaint with DirectWrite glyph rasterization on Windows (vendor/epaint/src/text/dwrite.rs).
 [patch.crates-io]
 epaint = { path = "vendor/epaint" }
+# Angerô: egui-winit without the undecorated-window shadow hack (vendor/egui-winit/ANGERO.md).
+egui-winit = { path = "vendor/egui-winit" }
