@@ -9,8 +9,12 @@
 //! GDI-classic grid-fitting also rounds each glyph's advance to whole pixels; [`gdi_advance_delta`]
 //! gives the layout that same advance, otherwise the snapped shapes sit unevenly ("ST ELLA").
 //!
-//! `ANGERO_TEXTO` picks the rendering mode for comparisons: `gdi` (default: GDI-classic grid-fitting,
-//! the sharpest), `natural`, `simetrico` (natural symmetric) or `egui` (off).
+//! Default (`ctnat`): GDI-natural grid-fitting rasterized as ClearType and averaged to grey, then
+//! darkened a little (`ANGERO_CONTRASTE`, default 0.5) — even letter shapes and spacing like Office.
+//! Plain grey GDI-classic (`gdi`) was crisp but spindly and unevenly spaced in cells.
+//!
+//! `ANGERO_TEXTO` picks the rendering mode for comparisons: `ctnat` (default), `ctgdi`, `gdi`,
+//! `natural`, `simetrico` (natural symmetric) or `egui` (off).
 
 #![allow(unsafe_code)]
 
@@ -23,7 +27,8 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_GLYPH_OFFSET, DWRITE_GLYPH_RUN, DWRITE_GRID_FIT_MODE_ENABLED, DWRITE_MEASURING_MODE,
     DWRITE_MEASURING_MODE_GDI_CLASSIC, DWRITE_MEASURING_MODE_NATURAL, DWRITE_RENDERING_MODE1,
     DWRITE_RENDERING_MODE1_GDI_CLASSIC, DWRITE_RENDERING_MODE1_NATURAL, DWRITE_RENDERING_MODE1_NATURAL_SYMMETRIC,
-    DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE, DWRITE_TEXTURE_ALIASED_1x1, DWriteCreateFactory, IDWriteFactory5,
+    DWRITE_MEASURING_MODE_GDI_NATURAL, DWRITE_RENDERING_MODE1_GDI_NATURAL, DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE,
+    DWRITE_TEXTURE_CLEARTYPE_3x1, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE, DWRITE_TEXTURE_ALIASED_1x1, DWriteCreateFactory, IDWriteFactory5,
     IDWriteFontFace, IDWriteInMemoryFontFileLoader,
 };
 
@@ -40,6 +45,8 @@ pub(crate) struct Glyph {
 #[derive(Clone, Copy, PartialEq)]
 enum Modo {
     Gdi,
+    CtGdi,
+    CtNat,
     Natural,
     Simetrico,
     Desligado,
@@ -49,10 +56,17 @@ fn modo() -> Modo {
     static MODO: std::sync::OnceLock<Modo> = std::sync::OnceLock::new();
     *MODO.get_or_init(|| match std::env::var("ANGERO_TEXTO").unwrap_or_default().to_ascii_lowercase().as_str() {
         "natural" => Modo::Natural,
+        "ctgdi" => Modo::CtGdi,
+        "gdi" => Modo::Gdi,
         "simetrico" => Modo::Simetrico,
         "egui" | "desligado" => Modo::Desligado,
-        _ => Modo::Gdi,
+        _ => Modo::CtNat,
     })
+}
+
+fn contraste() -> f32 {
+    static K: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
+    *K.get_or_init(|| std::env::var("ANGERO_CONTRASTE").ok().and_then(|v| v.parse().ok()).unwrap_or(0.5))
 }
 
 struct Motor {
@@ -116,7 +130,8 @@ impl Motor {
 /// `glyph_id` at `size_px` pixels per em; `None` outside the GDI mode or when DirectWrite can't tell.
 /// Added to the shaper's advance, so kerning is kept.
 pub(crate) fn gdi_advance_delta(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32) -> Option<f32> {
-    if modo() != Modo::Gdi || !(size_px > 0.0 && size_px < 1000.0) {
+    let modo = modo();
+    if !matches!(modo, Modo::Gdi | Modo::CtGdi | Modo::CtNat) || !(size_px > 0.0 && size_px < 1000.0) {
         return None;
     }
     MOTOR.with(|m| {
@@ -140,7 +155,7 @@ pub(crate) fn gdi_advance_delta(bytes: &[u8], index: u32, glyph_id: u16, size_px
                 // The glyph is drawn at whole pixels per em (see `rasterize`): its GDI advance at that size,
                 // minus the design advance at the layout's size the shaper used.
                 let em = size_px.round().max(1.0);
-                face.GetGdiCompatibleGlyphMetrics(em, 1.0, None, false, ids.as_ptr(), 1, gdi.as_mut_ptr(), false).ok()?;
+                face.GetGdiCompatibleGlyphMetrics(em, 1.0, None, modo == Modo::CtNat, ids.as_ptr(), 1, gdi.as_mut_ptr(), false).ok()?;
                 face.GetDesignGlyphMetrics(ids.as_ptr(), 1, design.as_mut_ptr(), false).ok()?;
                 let upem = fm.designUnitsPerEm as f32;
                 Some(gdi[0].advanceWidth as f32 * em / upem - design[0].advanceWidth as f32 * size_px / upem)
@@ -163,12 +178,13 @@ pub(crate) fn rasterize(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32, x
         let motor = m.get_or_insert_with(novo_motor).as_mut()?;
         let face = motor.face(bytes, index)?;
         let (rendering, measuring): (DWRITE_RENDERING_MODE1, DWRITE_MEASURING_MODE) = match modo {
-            Modo::Gdi => (DWRITE_RENDERING_MODE1_GDI_CLASSIC, DWRITE_MEASURING_MODE_GDI_CLASSIC),
+            Modo::Gdi | Modo::CtGdi => (DWRITE_RENDERING_MODE1_GDI_CLASSIC, DWRITE_MEASURING_MODE_GDI_CLASSIC),
+            Modo::CtNat => (DWRITE_RENDERING_MODE1_GDI_NATURAL, DWRITE_MEASURING_MODE_GDI_NATURAL),
             Modo::Natural => (DWRITE_RENDERING_MODE1_NATURAL, DWRITE_MEASURING_MODE_NATURAL),
             _ => (DWRITE_RENDERING_MODE1_NATURAL_SYMMETRIC, DWRITE_MEASURING_MODE_NATURAL),
         };
         // GDI-classic hints at whole pixels per em (as GDI does); the advances below use the same size.
-        let em = if modo == Modo::Gdi { size_px.round().max(1.0) } else { size_px };
+        let em = if matches!(modo, Modo::Gdi | Modo::CtGdi | Modo::CtNat) { size_px.round().max(1.0) } else { size_px };
         let indices = [glyph_id];
         let advances = [0.0f32];
         let offsets = [DWRITE_GLYPH_OFFSET::default()];
@@ -182,6 +198,7 @@ pub(crate) fn rasterize(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32, x
             isSideways: false.into(),
             bidiLevel: 0,
         };
+        let ct = matches!(modo, Modo::CtGdi | Modo::CtNat);
         let resultado = unsafe {
             (|| {
                 let analysis = motor
@@ -192,16 +209,28 @@ pub(crate) fn rasterize(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32, x
                         rendering,
                         measuring,
                         DWRITE_GRID_FIT_MODE_ENABLED,
-                        DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE,
+                        if ct { DWRITE_TEXT_ANTIALIAS_MODE_CLEARTYPE } else { DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE },
                         x_offset,
                         0.0,
                     )
                     .ok()?;
-                let r = analysis.GetAlphaTextureBounds(DWRITE_TEXTURE_ALIASED_1x1).ok()?;
+                let tipo = if ct { DWRITE_TEXTURE_CLEARTYPE_3x1 } else { DWRITE_TEXTURE_ALIASED_1x1 };
+                let r = analysis.GetAlphaTextureBounds(tipo).ok()?;
                 let (width, height) = ((r.right - r.left).max(0) as usize, (r.bottom - r.top).max(0) as usize);
-                let mut coverage = vec![0u8; width * height];
+                let mut coverage = vec![0u8; width * height * if ct { 3 } else { 1 }];
                 if width > 0 && height > 0 {
-                    analysis.CreateAlphaTexture(DWRITE_TEXTURE_ALIASED_1x1, &r, &mut coverage).ok()?;
+                    analysis.CreateAlphaTexture(tipo, &r, &mut coverage).ok()?;
+                }
+                if ct {
+                    // ClearType's three sub-pixel coverages averaged into one grey value.
+                    coverage = coverage.chunks_exact(3).map(|c| ((c[0] as u32 + c[1] as u32 + c[2] as u32 + 1) / 3) as u8).collect();
+                }
+                let k = contraste();
+                if k > 0.0 {
+                    for c in &mut coverage {
+                        let a = *c as f32 / 255.0;
+                        *c = ((a * (k + 1.0) / (a * k + 1.0)) * 255.0 + 0.5).min(255.0) as u8;
+                    }
                 }
                 Some(Glyph { left: r.left, top: r.top, width, height, coverage })
             })()

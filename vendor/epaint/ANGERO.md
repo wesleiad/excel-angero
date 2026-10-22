@@ -6,13 +6,14 @@ Cópia do crate [`epaint`](https://github.com/emilk/egui/tree/main/crates/epaint
 O que mudou (só no Windows):
 
 - `src/text/dwrite.rs` (novo): cada letra é desenhada pelo DirectWrite, o motor de texto do Windows,
-  no modo GDI clássico (encaixe forte nos pixels, como o Office em telas de 100 %), em vez do
-  rasterizador do egui. Se o DirectWrite não abrir a fonte, vale o desenho original.
+  com o encaixe GDI natural em ClearType (média das 3 cores = cinza) e um pouco mais de contraste,
+  em vez do rasterizador do egui (letras regulares e bem espaçadas, como no Office). Se o DirectWrite não abrir a fonte, vale o desenho original.
 - `src/text/font.rs`: `FontFace` guarda o índice da face; `allocate_glyph` tenta o DirectWrite
   primeiro; `hinted_advance_px` devolve a largura da letra ajustada aos pixels inteiros do GDI.
 - `src/text/text_layout.rs`: o posicionamento usa essa largura ajustada (senão as letras encaixadas
   ficam com buracos entre si: "ST ELLA").
 - `Cargo.toml`: dependência `windows` (DirectWrite) só no Windows.
 
-`ANGERO_TEXTO=egui` volta ao desenho original (para comparar); `natural` e `simetrico` usam outros
-modos do DirectWrite.
+`ANGERO_TEXTO=egui` volta ao desenho original (para comparar); `gdi` (o modo antigo: GDI clássico em
+cinza), `ctgdi`, `natural` e `simetrico` usam outros modos do DirectWrite. `ANGERO_CONTRASTE` (padrão
+0.5; 0 = sem reforço) escurece o traço.
