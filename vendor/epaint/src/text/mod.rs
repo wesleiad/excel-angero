@@ -3,6 +3,7 @@
 pub mod cursor;
 #[cfg(windows)]
 mod dwrite;
+mod foco;
 mod font;
 mod fonts;
 mod index;
@@ -10,6 +11,7 @@ mod text_layout;
 mod text_layout_types;
 
 pub use {
+    foco::{FOCO_MAXIMO, definir_foco, foco, foco_efetivo},
     fonts::{
         FontData, FontDefinitions, FontFamily, FontId, FontInsert, FontPriority, FontTweak,
         FontVariationAxis, Fonts, FontsImpl, FontsView, HintingTarget, InsertFontFamily,

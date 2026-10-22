@@ -9,12 +9,13 @@
 //! GDI-classic grid-fitting also rounds each glyph's advance to whole pixels; [`gdi_advance_delta`]
 //! gives the layout that same advance, otherwise the snapped shapes sit unevenly ("ST ELLA").
 //!
-//! Default (`ctnat`): GDI-natural grid-fitting rasterized as ClearType and averaged to grey, then
-//! darkened a little (`ANGERO_CONTRASTE`, default 0.5) — even letter shapes and spacing like Office.
-//! Plain grey GDI-classic (`gdi`) was crisp but spindly and unevenly spaced in cells.
+//! The mode follows the sharpness level (`foco.rs`): from natural-symmetric grey (smooth) through
+//! GDI-natural grid-fitting rasterized as ClearType and averaged to grey, darkened a little or more,
+//! to GDI-classic grid-fitting the same way (sharp). Plain grey GDI-classic (`gdi`) is crisp but
+//! spindly and unevenly spaced, so no level uses it.
 //!
-//! `ANGERO_TEXTO` picks the rendering mode for comparisons: `ctnat` (default), `ctgdi`, `gdi`,
-//! `natural`, `simetrico` (natural symmetric) or `egui` (off).
+//! `ANGERO_TEXTO` (`ctnat`, `ctgdi`, `gdi`, `natural`, `simetrico`, `egui` = off) and
+//! `ANGERO_CONTRASTE` (default 0.5) override the level, for comparisons.
 
 #![allow(unsafe_code)]
 
@@ -52,21 +53,36 @@ enum Modo {
     Desligado,
 }
 
-fn modo() -> Modo {
-    static MODO: std::sync::OnceLock<Modo> = std::sync::OnceLock::new();
-    *MODO.get_or_init(|| match std::env::var("ANGERO_TEXTO").unwrap_or_default().to_ascii_lowercase().as_str() {
-        "natural" => Modo::Natural,
-        "ctgdi" => Modo::CtGdi,
-        "gdi" => Modo::Gdi,
-        "simetrico" => Modo::Simetrico,
-        "egui" | "desligado" => Modo::Desligado,
-        _ => Modo::CtNat,
+/// `ANGERO_TEXTO` / `ANGERO_CONTRASTE`, for comparisons: they override the sharpness setting.
+fn forcado() -> Option<(Modo, f32)> {
+    static F: std::sync::OnceLock<Option<(Modo, f32)>> = std::sync::OnceLock::new();
+    *F.get_or_init(|| {
+        let modo = match std::env::var("ANGERO_TEXTO").ok()?.to_ascii_lowercase().as_str() {
+            "natural" => Modo::Natural,
+            "simetrico" => Modo::Simetrico,
+            "egui" | "desligado" => Modo::Desligado,
+            "gdi" => Modo::Gdi,
+            "ctgdi" => Modo::CtGdi,
+            _ => Modo::CtNat,
+        };
+        let contraste = std::env::var("ANGERO_CONTRASTE").ok().and_then(|v| v.parse().ok()).unwrap_or(0.5);
+        Some((modo, contraste))
     })
 }
 
-fn contraste() -> f32 {
-    static K: std::sync::OnceLock<f32> = std::sync::OnceLock::new();
-    *K.get_or_init(|| std::env::var("ANGERO_CONTRASTE").ok().and_then(|v| v.parse().ok()).unwrap_or(0.5))
+/// Rendering mode and contrast boost for a screen with `ppp` pixels per point: the sharpness
+/// level (see `foco.rs`) from smooth to sharp.
+fn ajuste(ppp: f32) -> (Modo, f32) {
+    if let Some(f) = forcado() {
+        return f;
+    }
+    match super::foco::foco_efetivo(ppp) {
+        1 => (Modo::Simetrico, 0.0),
+        2 => (Modo::CtNat, 0.25),
+        3 => (Modo::CtNat, 0.5),
+        4 => (Modo::CtNat, 1.0),
+        _ => (Modo::CtGdi, 0.5),
+    }
 }
 
 struct Motor {
@@ -74,8 +90,8 @@ struct Motor {
     loader: IDWriteInMemoryFontFileLoader,
     /// (address and length of the font bytes, face index) → face; `None` = DirectWrite can't read it.
     faces: HashMap<(usize, usize, u32), Option<IDWriteFontFace>>,
-    /// (font bytes address, face index, glyph, size bits) → advance correction in pixels.
-    avancos: HashMap<(usize, u32, u16, u32), Option<f32>>,
+    /// (font bytes address, face index, glyph, size bits, rendering mode) → advance correction in pixels.
+    avancos: HashMap<(usize, u32, u16, u32, u8), Option<f32>>,
 }
 
 thread_local! {
@@ -129,15 +145,15 @@ impl Motor {
 /// How many pixels GDI-classic grid-fitting adds to (or takes from) the design advance of
 /// `glyph_id` at `size_px` pixels per em; `None` outside the GDI mode or when DirectWrite can't tell.
 /// Added to the shaper's advance, so kerning is kept.
-pub(crate) fn gdi_advance_delta(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32) -> Option<f32> {
-    let modo = modo();
+pub(crate) fn gdi_advance_delta(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32, ppp: f32) -> Option<f32> {
+    let (modo, _) = ajuste(ppp);
     if !matches!(modo, Modo::Gdi | Modo::CtGdi | Modo::CtNat) || !(size_px > 0.0 && size_px < 1000.0) {
         return None;
     }
     MOTOR.with(|m| {
         let mut m = m.borrow_mut();
         let motor = m.get_or_insert_with(novo_motor).as_mut()?;
-        let key = (bytes.as_ptr() as usize, index, glyph_id, size_px.to_bits());
+        let key = (bytes.as_ptr() as usize, index, glyph_id, size_px.to_bits(), modo as u8);
         if let Some(v) = motor.avancos.get(&key) {
             return *v;
         }
@@ -168,8 +184,8 @@ pub(crate) fn gdi_advance_delta(bytes: &[u8], index: u32, glyph_id: u16, size_px
 
 /// Rasterizes glyph `glyph_id` of face `index` in `bytes` at `size_px` pixels per em, with the pen
 /// `x_offset` pixels right of the whole-pixel origin (egui's sub-pixel bin).
-pub(crate) fn rasterize(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32, x_offset: f32) -> Option<Glyph> {
-    let modo = modo();
+pub(crate) fn rasterize(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32, x_offset: f32, ppp: f32) -> Option<Glyph> {
+    let (modo, k) = ajuste(ppp);
     if modo == Modo::Desligado || !(size_px > 0.0 && size_px < 1000.0) {
         return None;
     }
@@ -225,7 +241,6 @@ pub(crate) fn rasterize(bytes: &[u8], index: u32, glyph_id: u16, size_px: f32, x
                     // ClearType's three sub-pixel coverages averaged into one grey value.
                     coverage = coverage.chunks_exact(3).map(|c| ((c[0] as u32 + c[1] as u32 + c[2] as u32 + 1) / 3) as u8).collect();
                 }
-                let k = contraste();
                 if k > 0.0 {
                     for c in &mut coverage {
                         let a = *c as f32 / 255.0;

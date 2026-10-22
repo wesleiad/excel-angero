@@ -707,6 +707,8 @@ impl CachedFamily {
 pub struct Fonts {
     pub fonts: FontsImpl,
     galley_cache: GalleyCache,
+    /// Angerô: the text-sharpness setting these glyphs were drawn with (see `foco::geracao`).
+    geracao_foco: u32,
 }
 
 impl Fonts {
@@ -716,6 +718,7 @@ impl Fonts {
         Self {
             fonts: FontsImpl::new(options, definitions),
             galley_cache: Default::default(),
+            geracao_foco: super::foco::geracao(),
         }
     }
 
@@ -728,7 +731,9 @@ impl Fonts {
     pub fn begin_pass(&mut self, options: TextOptions) {
         let text_options_changed = self.fonts.options() != &options;
         let font_atlas_almost_full = self.fonts.atlas.fill_ratio() > 0.8;
-        let needs_recreate = text_options_changed || font_atlas_almost_full;
+        // Angerô: a new text-sharpness setting redraws every glyph and lays the text out again.
+        let foco_mudou = self.geracao_foco != super::foco::geracao();
+        let needs_recreate = text_options_changed || font_atlas_almost_full || foco_mudou;
 
         if needs_recreate {
             let definitions = self.fonts.definitions.clone();
@@ -736,6 +741,7 @@ impl Fonts {
             *self = Self {
                 fonts: FontsImpl::new(options, definitions),
                 galley_cache: Default::default(),
+                geracao_foco: super::foco::geracao(),
             };
         }
 

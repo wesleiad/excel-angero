@@ -2173,6 +2173,8 @@ fn view(app: &mut SheetApp, ui: &mut Ui) {
         act(app, "view.zoomToSelection", json!({"viewWidth": r.width(), "viewHeight": r.height()}));
     }
     sep(ui);
+    foco_do_texto(app, ui);
+    sep(ui);
     let fp = big_button(ui, Icon::Freeze, "Freeze\nPanes", "Freeze Panes", true);
     for sequence in
         keytip_table::group_extension(app.keytips.prefix().unwrap_or_default(), &["view.freezePanes", "view.freezeTopRow", "view.freezeFirstColumn"])
@@ -2243,6 +2245,40 @@ fn view(app: &mut SheetApp, ui: &mut Ui) {
                 }
             },
         );
+    });
+}
+
+/// Angerô: text sharpness ("foco"). Automatic picks the best letter drawing for each screen; the
+/// slider sets it by hand, from smooth (1) to sharp (5), and the text redraws right away.
+fn foco_do_texto(app: &mut SheetApp, ui: &mut Ui) {
+    let t = theme::Tokens::get(ui.ctx());
+    let ppp = ui.ctx().pixels_per_point();
+    ui.vertical(|ui| {
+        ui.label(egui::RichText::new("Foco do texto").font(theme::ui_font(11.5)).color(t.text_dim));
+        let mut auto = app.ui.foco == 0;
+        let dica = "Escolhe sozinho a letra mais nítida para cada tela (100%, 125%…)";
+        if ui.checkbox(&mut auto, "Foco automático").on_hover_text(dica).changed() {
+            // Turning automatic off keeps what the screen shows now, as the manual starting point.
+            let nivel = if auto { 0 } else { egui::epaint::text::foco_efetivo(ppp) };
+            act(app, "view.foco", json!({"nivel": nivel}));
+        }
+        ui.horizontal(|ui| {
+            let mut nivel = egui::epaint::text::foco_efetivo(ppp);
+            let nome = |n: u8| match n {
+                1 => "Suave",
+                2 => "Leve",
+                3 => "Médio",
+                4 => "Firme",
+                _ => "Nítido",
+            };
+            let r = ui
+                .add(egui::Slider::new(&mut nivel, 1..=egui::epaint::text::FOCO_MAXIMO).show_value(false))
+                .on_hover_text("Foco manual: arraste para a esquerda (letras mais suaves) ou para a direita (mais nítidas)");
+            ui.label(egui::RichText::new(nome(nivel)).font(theme::ui_font(12.0)));
+            if r.changed() {
+                act(app, "view.foco", json!({"nivel": nivel}));
+            }
+        });
     });
 }
 

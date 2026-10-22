@@ -12,6 +12,9 @@ O que mudou (só no Windows):
   primeiro; `hinted_advance_px` devolve a largura da letra ajustada aos pixels inteiros do GDI.
 - `src/text/text_layout.rs`: o posicionamento usa essa largura ajustada (senão as letras encaixadas
   ficam com buracos entre si: "ST ELLA").
+- `src/text/foco.rs` (novo, só no Excel): o "Foco do texto" (guia Exibir). 0 = automático (nível 3
+  em telas de 125 % ou mais, nível 5 em telas de 100 %); 1 a 5 = manual, de suave a nítido. Mudar o
+  nível faz o `Fonts` redesenhar todas as letras no quadro seguinte (`fonts.rs`, `geracao_foco`).
 - `Cargo.toml`: dependência `windows` (DirectWrite) só no Windows.
 
 `ANGERO_TEXTO=egui` volta ao desenho original (para comparar); `gdi` (o modo antigo: GDI clássico em

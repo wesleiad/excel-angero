@@ -58,6 +58,9 @@ pub struct UiState {
     pub status_bar: bool,
     /// Motion in the UI: the selection outline glides to a new selection (View ▸ Animations).
     pub animations: bool,
+    /// Angerô: text sharpness (View ▸ Foco do texto): 0 = automatic per screen, 1 (smooth) to 5
+    /// (sharp) = manual. See `epaint::text::definir_foco`.
+    pub foco: u8,
     /// Enable AutoComplete for cell values (File ▸ Options ▸ Editing): typed text is completed
     /// from the one matching entry in the same column.
     pub autocomplete: bool,
@@ -103,6 +106,7 @@ impl Default for UiState {
             formula_bar_expanded: false,
             status_bar: true,
             animations: true,
+            foco: 0,
             autocomplete: true,
             recent: vec![],
             keytip_invoke: None,
@@ -634,6 +638,12 @@ impl SheetApp {
                 }
                 Ok(json!({"mode": self.ui.theme_mode()}))
             }
+            "view.foco" => {
+                let nivel = p.get("nivel").and_then(Json::as_u64).unwrap_or(0).min(u64::from(egui::epaint::text::FOCO_MAXIMO));
+                self.ui.foco = nivel as u8;
+                egui::epaint::text::definir_foco(self.ui.foco);
+                Ok(json!({"nivel": self.ui.foco}))
+            }
             "view.animations" => {
                 self.ui.animations = p.get("on").and_then(Json::as_bool).unwrap_or(!self.ui.animations);
                 Ok(json!({"on": self.ui.animations}))
@@ -1135,6 +1145,8 @@ impl SheetApp {
         // A keytip control request lives one frame: the ribbon consumes it during `ui`, and
         // anything that never reached a control (collapsed ribbon, tab switch) is dropped.
         self.ui.keytip_invoke = None;
+        // Angerô: text sharpness (a no-op unless it changed; a change redraws the text next frame).
+        egui::epaint::text::definir_foco(self.ui.foco);
         if self.fonts_han.is_some_and(|han| han != theme::HanOrder::of(self.ui.language)) {
             self.fonts_ready = false;
             self.fonts_set = false;

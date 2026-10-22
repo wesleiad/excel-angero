@@ -647,6 +647,7 @@ impl FontFace {
                 id,
                 metrics.scale,
                 bin.as_float(),
+                metrics.pixels_per_point,
             )
         {
             let alloc = atlas_from_coverage(atlas, metrics, &g);
@@ -677,7 +678,13 @@ impl FontFace {
         if metrics.location.coords().iter().all(|c| *c == Default::default())
             && let Ok(id) = u16::try_from(glyph_id.to_u32())
             && let Some(delta) =
-                super::dwrite::gdi_advance_delta(AsRef::<[u8]>::as_ref(self.font.borrow_owner().as_ref()), self.index, id, metrics.scale)
+                super::dwrite::gdi_advance_delta(
+                    AsRef::<[u8]>::as_ref(self.font.borrow_owner().as_ref()),
+                    self.index,
+                    id,
+                    metrics.scale,
+                    metrics.pixels_per_point,
+                )
         {
             return advance_px + delta;
         }
