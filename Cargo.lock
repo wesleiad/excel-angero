@@ -1504,6 +1504,7 @@ dependencies = [
  "gridcraft-ui-egui",
  "image",
  "log",
+ "memoria-angero",
  "muda",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
@@ -2065,6 +2066,10 @@ checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
 ]
+
+[[package]]
+name = "memoria-angero"
+version = "0.1.0"
 
 [[package]]
 name = "miniz_oxide"
