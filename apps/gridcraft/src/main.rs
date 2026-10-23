@@ -312,12 +312,14 @@ fn main() -> eframe::Result<()> {
     for f in &files {
         app.open_path(f);
     }
-    let mut viewport = egui::ViewportBuilder::default()
+    let (janela_tam, janela_pos) = janela_inicial(1440.0, 900.0);
+    let viewport = egui::ViewportBuilder::default()
         .with_title("Excel")
-        .with_inner_size([1440.0, 900.0])
-        .with_min_inner_size([640.0, 420.0])
+        .with_inner_size(janela_tam)
+        .with_min_inner_size([janela_tam.x.min(640.0), janela_tam.y.min(420.0)])
         .with_app_id("ai.storyteller.gridcraft")
         .with_drag_and_drop(true);
+    let mut viewport = match janela_pos { Some(pos) => viewport.with_position(pos), None => viewport };
     if cfg!(target_os = "macos") {
         viewport = viewport.with_fullsize_content_view(true).with_titlebar_shown(false).with_title_shown(false);
     }
@@ -418,5 +420,17 @@ mod packaging_tests {
         for ext in &mac {
             assert!(FileKind::from_path(&format!("book.{ext}")).is_some(), "Excel doesn't open .{ext}");
         }
+    }
+}
+
+/// Office Angerô: tamanho e posição da janela ao abrir, cabendo na área livre da tela e centralizada
+/// (sem isso, em notebooks e telas com zoom de 125-150 % a janela passava da tela e o botão Fechar sumia).
+fn janela_inicial(largura: f32, altura: f32) -> (egui::Vec2, Option<egui::Pos2>) {
+    match memoria_angero::area_trabalho() {
+        Some((x, y, w, h)) => {
+            let tam = egui::vec2(largura.min(w * 0.92), altura.min(h * 0.92));
+            (tam, Some(egui::pos2(x + (w - tam.x) / 2.0, y + (h - tam.y) / 2.0)))
+        }
+        None => (egui::vec2(largura, altura), None),
     }
 }

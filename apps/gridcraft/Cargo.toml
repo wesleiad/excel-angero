@@ -11,6 +11,7 @@ description = "GridCraft desktop app"
 workspace = true
 
 [dependencies]
+memoria-angero = { path = "../../vendor/memoria-angero" }  # Office Angerô: janela cabendo na tela
 gridcraft-engine = { workspace = true }
 gridcraft-ui-egui = { workspace = true }
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit", "wayland", "x11"] }
