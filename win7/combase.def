@@ -1,0 +1,4 @@
+LIBRARY combase
+EXPORTS
+    CoTaskMemFree=ole32.CoTaskMemFree
+    CoCreateFreeThreadedMarshaler=ole32.CoCreateFreeThreadedMarshaler

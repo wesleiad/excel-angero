@@ -97,7 +97,8 @@ mod windows {
     }
 
     pub fn iniciar(repo: &'static str, exe: &'static str) {
-        if std::env::var_os("OFFICE_ANGERO_SEM_ATUALIZACAO").is_some() {
+        // Edição Windows 7: as atualizações publicadas são para Windows 10/11 e não abririam lá.
+        if cfg!(target_vendor = "win7") || std::env::var_os("OFFICE_ANGERO_SEM_ATUALIZACAO").is_some() {
             return;
         }
         let Some(pasta) = std::env::current_exe().ok().and_then(|p| p.parent().map(Path::to_path_buf)) else { return };

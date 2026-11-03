@@ -334,7 +334,10 @@ fn main() -> eframe::Result<()> {
     // Before eframe creates the wgpu instance: Windows starts on DirectX 12, or OpenGL when
     // DirectX 12 has no GPU driver, and never touches Vulkan unless asked (see graphics.rs).
     #[cfg(target_os = "windows")]
-    let backend_override = eframe::wgpu::Backends::from_env();
+    let backend_override = eframe::wgpu::Backends::from_env()
+        // Angerô, edição Windows 7: não há DirectX 12; desenha com OpenGL (o Mesa ao lado do exe
+        // faz o desenho pelo processador quando o vídeo não tem OpenGL 3.3).
+        .or(cfg!(target_vendor = "win7").then_some(eframe::wgpu::Backends::GL));
     #[cfg(target_os = "windows")]
     let (options, first_backends) = {
         let mut options = options;

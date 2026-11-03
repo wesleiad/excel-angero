@@ -1,0 +1,24 @@
+Excel - Angerô (edição Windows 7)
+==================================
+
+REQUISITOS
+- Windows 7 SP1 de 64 bits (também roda no Windows 8, 10 e 11).
+- Não precisa de placa de vídeo, Visual C++, .NET nem internet: tudo o que o programa
+  usa está nesta pasta.
+
+O QUE TEM NESTA PASTA
+- excel-angero.exe ........ o Excel - Angerô, compilado para Windows 7.
+- opengl32.dll e
+  libgallium_wgl.dll ...... Mesa 3D 26.2.5 (licença MIT, github.com/pal1000/mesa-dist-win).
+                            Desenha a tela pelo processador quando o vídeo do computador
+                            não tem OpenGL 3.3 (vídeo onboard antigo). NÃO apague.
+- combase.dll ............. ponte para a ole32.dll (o Windows 7 não tem combase.dll).
+
+DIFERENÇAS PARA A VERSÃO NORMAL
+- Não se atualiza sozinho (as atualizações publicadas são para Windows 10/11).
+  Para atualizar, rode um instalador novo da edição Windows 7.
+- Em PC antigo a tela é desenhada pelo processador: planilhas grandes ficam mais lentas.
+
+PROBLEMAS
+- O registro do programa fica em %APPDATA%\Excel-Angero (arquivos .log).
+  Mande essa pasta para a TI se o programa não abrir.
