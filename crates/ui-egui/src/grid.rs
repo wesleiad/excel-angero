@@ -729,7 +729,9 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
         view: geo.cells,
         now,
         frame_nr: ui.ctx().cumulative_frame_nr(),
-        animate: app.ui.animations && ui.ctx().global_style().animation_time > 0.0 && !app.shots.in_flight(),
+        // Angerô: o quadrado da seleção pula direto para a célula (pedido do usuário: "precisa ser
+        // muito rápido"); deslizar 120 ms parecia lento e gastava ~3 quadros a mais por tecla.
+        animate: false,
     });
     if app.grid.glide.is_gliding() {
         ui.ctx().request_repaint();
@@ -792,7 +794,8 @@ pub fn show(app: &mut SheetApp, ui: &mut egui::Ui) {
     context_menu(app, ui);
     let track_x = if rtl { (available.left(), rect.left()) } else { (rect.right(), available.right()) };
     vertical_scrollbar(app, ui, sh, &geo, track_x, max_y, &t);
-    if app.session.clipboard.is_some() {
+    // Angerô, modo leve: contorno tracejado parado (andando, redesenhava a tela 16x por segundo).
+    if app.session.clipboard.is_some() && !crate::leve::ativo() {
         // By the clock, not per frame: a gliding outline repaints more often than the ants step.
         app.grid.marching_phase = crate::selection_glide::ants_phase(now);
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(60));

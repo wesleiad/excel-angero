@@ -91,6 +91,26 @@ pub fn configure_backends(options: &mut NativeOptions, backends: Backends) {
     }
 }
 
+/// Office Angerô: `ANGERO_GPU=software` desenha pelo processador (WARP, o "Microsoft Basic Render
+/// Driver"), como num PC sem driver de vídeo. Serve para medir o modo leve sem precisar de um PC
+/// fraco, e como saída de emergência quando o driver de vídeo dá problema.
+pub fn forcar_software() -> bool {
+    std::env::var("ANGERO_GPU").is_ok_and(|v| v.trim().eq_ignore_ascii_case("software"))
+}
+
+/// Faz o eframe escolher o adaptador por software (DirectX 12 WARP).
+pub fn escolher_software(options: &mut NativeOptions) {
+    if let WgpuSetup::CreateNew(create) = &mut options.wgpu_options.wgpu_setup {
+        create.native_adapter_selector = Some(std::sync::Arc::new(|adapters, _surface| {
+            adapters
+                .iter()
+                .find(|a| a.get_info().device_type == DeviceType::Cpu)
+                .cloned()
+                .ok_or_else(|| "nenhum adaptador por software (WARP)".to_string())
+        }));
+    }
+}
+
 /// Chooses the backends ([`choose_backends`]), applies them to `options` and returns them.
 /// Without a `backend_override` this first probes DirectX 12 with a short-lived instance of its
 /// own, which is dropped before eframe creates the real one.

@@ -334,13 +334,23 @@ fn main() -> eframe::Result<()> {
     // Before eframe creates the wgpu instance: Windows starts on DirectX 12, or OpenGL when
     // DirectX 12 has no GPU driver, and never touches Vulkan unless asked (see graphics.rs).
     #[cfg(target_os = "windows")]
-    let backend_override = eframe::wgpu::Backends::from_env();
+    let backend_override = eframe::wgpu::Backends::from_env()
+        // Angerô: ANGERO_GPU=software força o DirectX 12 por software (WARP).
+        .or(graphics::forcar_software().then_some(eframe::wgpu::Backends::DX12));
     #[cfg(target_os = "windows")]
     let (options, first_backends) = {
         let mut options = options;
         let backends = graphics::configure(&mut options, backend_override);
+        if graphics::forcar_software() {
+            graphics::escolher_software(&mut options);
+        }
         (options, backends)
     };
+    // Angerô: modo leve (PC com até 8 GB, até 4 núcleos ou vídeo por software; ver ui-egui leve.rs).
+    // O vídeo só é conhecido depois que o eframe cria o adaptador: completado no criador do app.
+    let ram = memoria_angero::ram_total();
+    let nucleos = std::thread::available_parallelism().map_or(2, |n| n.get());
+    gridcraft_ui_egui::leve::definir(gridcraft_ui_egui::leve::decidir(ram, nucleos, false));
     #[cfg(target_os = "windows")]
     let retry_options = options.clone();
     // Registered before the event loop starts, so it catches the Finder event that launched us as
@@ -361,6 +371,22 @@ fn main() -> eframe::Result<()> {
                     return Err("the app was already created".into());
                 };
                 SheetApp::setup_context_for_language(&cc.egui_ctx, app.ui.dark, app.ui.language);
+                // Angerô: vídeo por software (WARP, llvmpipe, GDI Generic) também liga o modo leve.
+                if let Some(rs) = &cc.wgpu_render_state {
+                    let info = rs.adapter.get_info();
+                    let nome = info.name.to_ascii_lowercase();
+                    let software = info.device_type == eframe::wgpu::DeviceType::Cpu
+                        || ["llvmpipe", "softpipe", "gdi generic", "basic render"].iter().any(|n| nome.contains(n));
+                    gridcraft_ui_egui::leve::definir(gridcraft_ui_egui::leve::decidir(ram, nucleos, software));
+                    log::info!(
+                        "graphics: adapter {:?} ({:?}, {:?}); modo leve: {} (RAM {} MB, {nucleos} núcleos)",
+                        info.name,
+                        info.device_type,
+                        info.backend,
+                        gridcraft_ui_egui::leve::ativo(),
+                        ram.map_or(0, |b| b >> 20)
+                    );
+                }
                 if let Some(port) = control_port {
                     match control_server::start(port, cc.egui_ctx.clone()) {
                         Ok(rx) => app.control_rx = Some(rx),

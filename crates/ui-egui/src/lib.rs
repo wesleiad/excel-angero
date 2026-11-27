@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 pub mod backstage;
+pub mod leve;
 mod border_preview;
 mod cell_pictures;
 pub mod chartview;
@@ -212,6 +213,18 @@ pub struct Perf {
     pub grid_ms: f64,
     pub fps: f64,
     last: f64,
+    /// Angerô: quadros desenhados e tempo somado (ms) de cada parte da tela desde o início,
+    /// para medir o custo por ação (canal --control, campo "perf").
+    pub quadros: u64,
+    pub partes: std::collections::BTreeMap<&'static str, f64>,
+}
+
+impl Perf {
+    fn somar(&mut self, parte: &'static str, desde: f64) -> f64 {
+        let agora = now_ms();
+        *self.partes.entry(parte).or_default() += agora - desde;
+        agora
+    }
 }
 
 /// Which parts of the app's own window chrome are drawn. Everything is on by default; a host
@@ -1254,6 +1267,7 @@ impl SheetApp {
             return;
         }
         let t0 = now_ms();
+        leve::aplicar_estilo(&ctx);
         self.poll_abrindo(&ctx);
         text_box::before_ui(self, &ctx);
         // The language the widgets translate with this frame (see `i18n::current`).
@@ -1266,36 +1280,46 @@ impl SheetApp {
         if self.backstage.is_none() {
             self.ribbon_keys(&ctx);
         }
+        let mut m = self.perf.somar("inicio", t0);
         if self.chrome.title_bar {
             ribbon::title_bar(self, ui);
             janela::bordas(&ctx);
         }
+        m = self.perf.somar("titulo", m);
         if self.backstage.is_some() {
             // File tab: the Backstage view replaces everything below the title bar.
             backstage::show(self, ui);
+            m = self.perf.somar("backstage", m);
         } else {
             ribbon::show(self, ui);
+            m = self.perf.somar("faixa", m);
             widgets::notice_bar(self, ui);
             if self.session.prefs.formula_bar {
                 formula_bar::show(self, ui);
             }
+            m = self.perf.somar("formula", m);
             if self.ui.status_bar {
                 tabs::status_bar(self, ui);
             }
+            m = self.perf.somar("status", m);
             tabs::sheet_tabs(self, ui);
             pivot_pane::show(self, ui);
             panes::show(self, ui);
+            m = self.perf.somar("abas_paineis", m);
             egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.grid_bg)).show(ui, |ui| {
                 let g0 = now_ms();
                 grid::show(self, ui);
                 self.perf.grid_ms = now_ms() - g0;
             });
+            m = self.perf.somar("grade", m);
         }
         dialogs::show(self, &ctx);
         widgets::message_box(self, &ctx);
         widgets::toast(self, &ctx);
         control::issue_screenshots(self, &ctx);
         control::collect_screenshots(self, &ctx);
+        self.perf.somar("dialogos", m);
+        self.perf.quadros += 1;
         if !ctx.input(|i| i.focused) {
             // Nothing else to do.
         }

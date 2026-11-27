@@ -87,7 +87,7 @@ pub fn inspect(app: &SheetApp, ctx: &egui::Context) -> Json {
         "mode": format!("{:?}", app.session.mode),
         "documents": app.session.documents().iter().map(|d| json!({"title": d.display_title(), "dirty": d.is_dirty()})).collect::<Vec<_>>(),
         "activeDocument": app.session.active_index(),
-        "perf": {"frameMs": app.perf.frame_ms, "gridMs": app.perf.grid_ms, "fps": app.perf.fps},
+        "perf": {"frameMs": app.perf.frame_ms, "gridMs": app.perf.grid_ms, "fps": app.perf.fps, "quadros": app.perf.quadros, "partes": app.perf.partes, "leve": crate::leve::ativo()},
     })
 }
 

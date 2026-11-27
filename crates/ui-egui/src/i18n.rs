@@ -118,6 +118,25 @@ impl Language {
     /// A label that needs two translations (Home's text "Orientation" vs Page Layout's print
     /// "Orientation") is keyed `context|label`: English shows only the part after the `|`.
     pub fn tr(self, text: &str) -> &str {
+        // Angerô: o pt-BR é um `match` de ~960 textos comparados um a um, chamado para cada rótulo
+        // em todo quadro; o resultado fica guardado por texto (a tabela é fixa, nunca muda).
+        if self == Self::PtBr {
+            thread_local! {
+                static PT: std::cell::RefCell<std::collections::HashMap<String, Option<&'static str>>> = Default::default();
+            }
+            let achado = PT.with(|m| {
+                let mut m = m.borrow_mut();
+                if let Some(v) = m.get(text) {
+                    return *v;
+                }
+                let v = pt::translate(text);
+                if m.len() < 20_000 {
+                    m.insert(text.to_string(), v);
+                }
+                v
+            });
+            return achado.unwrap_or_else(|| text.rsplit_once('|').map_or(text, |(_, label)| label));
+        }
         let translated = match self {
             Self::En => None,
             Self::Es => es::translate(text),
